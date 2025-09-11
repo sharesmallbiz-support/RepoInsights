@@ -15,8 +15,13 @@ import ContributorStats from '@/components/ContributorStats';
 import CommitTimeline from '@/components/CommitTimeline';
 import WorkClassification from '@/components/WorkClassification';
 import ExportOptions from '@/components/ExportOptions';
+import UserOverviewCard from '@/components/user/UserOverviewCard';
+import UserPortfolio from '@/components/user/UserPortfolio';
+import UserActivity from '@/components/user/UserActivity';
+import UserBestPractices from '@/components/user/UserBestPractices';
+import UserImpact from '@/components/user/UserImpact';
 import { apiRequest } from '@/lib/queryClient';
-import type { AnalysisResponse } from '@shared/schema';
+import type { AnalysisResponse, RepositoryAnalysisResponse, UserAnalysisResponse } from '@shared/schema';
 
 interface AnalysisState {
   isAnalyzing: boolean;
@@ -54,7 +59,7 @@ export default function Dashboard() {
       }));
       toast({
         title: "Analysis Complete",
-        description: `Successfully analyzed ${data.repositoryName}`,
+        description: `Successfully analyzed ${data.analysisType === 'repository' ? (data as RepositoryAnalysisResponse).repositoryName : (data as UserAnalysisResponse).username}`,
       });
     },
     onError: (error: Error) => {
@@ -225,34 +230,68 @@ export default function Dashboard() {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-8 mt-8">
-                <DORAMetrics metrics={analysis.data?.doraMetrics} />
-                <Separator />
-                <RepositoryHealth metrics={analysis.data?.healthMetrics} />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <>
+                    <DORAMetrics metrics={(analysis.data as RepositoryAnalysisResponse).doraMetrics} />
+                    <Separator />
+                    <RepositoryHealth metrics={(analysis.data as RepositoryAnalysisResponse).healthMetrics} />
+                  </>
+                ) : (
+                  <div className="space-y-8">
+                    <UserOverviewCard userProfile={(analysis.data as UserAnalysisResponse).userAnalysis.userProfile} />
+                    <UserPortfolio portfolioSummary={(analysis.data as UserAnalysisResponse).userAnalysis.portfolioSummary} />
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="dora" className="mt-8">
-                <DORAMetrics metrics={analysis.data?.doraMetrics} />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <DORAMetrics metrics={(analysis.data as RepositoryAnalysisResponse).doraMetrics} />
+                ) : (
+                  <UserImpact impact={(analysis.data as UserAnalysisResponse).userAnalysis.impact} />
+                )}
               </TabsContent>
 
               <TabsContent value="health" className="mt-8">
-                <RepositoryHealth metrics={analysis.data?.healthMetrics} />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <RepositoryHealth metrics={(analysis.data as RepositoryAnalysisResponse).healthMetrics} />
+                ) : (
+                  <UserBestPractices bestPractices={(analysis.data as UserAnalysisResponse).userAnalysis.bestPractices} />
+                )}
               </TabsContent>
 
               <TabsContent value="contributors" className="mt-8">
-                <ContributorStats contributors={analysis.data?.contributors} />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <ContributorStats contributors={(analysis.data as RepositoryAnalysisResponse).contributors} />
+                ) : (
+                  <UserPortfolio portfolioSummary={(analysis.data as UserAnalysisResponse).userAnalysis.portfolioSummary} />
+                )}
               </TabsContent>
 
               <TabsContent value="timeline" className="mt-8">
-                <CommitTimeline timeline={analysis.data?.timeline} />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <CommitTimeline timeline={(analysis.data as RepositoryAnalysisResponse).timeline} />
+                ) : (
+                  <UserActivity activityMetrics={(analysis.data as UserAnalysisResponse).userAnalysis.activityMetrics} />
+                )}
               </TabsContent>
 
               <TabsContent value="classification" className="space-y-8 mt-8">
-                <WorkClassification breakdown={analysis.data?.workClassification} />
-                <Separator />
-                <ExportOptions 
-                  repositoryUrl={analysis.repositoryUrl} 
-                  analysisData={analysis.data}
-                />
+                {analysis.data?.analysisType === 'repository' ? (
+                  <>
+                    <WorkClassification breakdown={(analysis.data as RepositoryAnalysisResponse).workClassification} />
+                    <Separator />
+                    <ExportOptions 
+                      repositoryUrl={analysis.repositoryUrl} 
+                      analysisData={analysis.data}
+                    />
+                  </>
+                ) : (
+                  <div className="space-y-8">
+                    <UserBestPractices bestPractices={(analysis.data as UserAnalysisResponse).userAnalysis.bestPractices} />
+                    <UserImpact impact={(analysis.data as UserAnalysisResponse).userAnalysis.impact} />
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>
