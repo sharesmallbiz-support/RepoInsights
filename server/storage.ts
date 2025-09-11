@@ -65,7 +65,7 @@ export class MemStorage implements IStorage {
 
   async getAnalysisByUrl(url: string): Promise<Analysis | undefined> {
     return Array.from(this.analyses.values()).find(
-      (analysis) => analysis.repositoryUrl === url
+      (analysis) => analysis.repositoryUrl === url || analysis.userUrl === url
     );
   }
 

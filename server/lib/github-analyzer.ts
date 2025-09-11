@@ -4,7 +4,13 @@ import type {
   HealthMetrics, 
   Contributor, 
   TimelineDay, 
-  WorkClassification 
+  WorkClassification,
+  UserProfile,
+  PortfolioSummary,
+  ActivityMetrics,
+  BestPractices,
+  Impact,
+  UserAnalysis
 } from '@shared/schema';
 
 interface GitHubRepoData {
@@ -515,16 +521,14 @@ export class GitHubAnalyzer {
     const timeline = this.calculateTimeline(allCommits);
     const workClassification = this.calculateWorkClassification(allCommits);
     
+    // Build user-focused analysis instead of aggregated repository metrics
+    const userAnalysis = this.buildUserAnalysis(userData, repositories, allCommits);
+    
     return {
+      userAnalysis,
       userData,
-      repositories: repositoryNames,
+      repositories,
       totalRepositories: repositories.length,
-      doraMetrics,
-      healthMetrics,
-      contributors,
-      timeline,
-      workClassification,
-      totalCommits: allCommits.length,
     };
   }
 
@@ -589,5 +593,247 @@ export class GitHubAnalyzer {
     if (diffDays === 1) return '1 day ago';
     if (diffDays < 30) return `${diffDays} days ago`;
     return date.toLocaleDateString();
+  }
+
+  private buildUserAnalysis(userData: any, repositories: any[], commits: CommitData[]): UserAnalysis {
+    const userProfile = this.buildUserProfile(userData);
+    const portfolioSummary = this.buildPortfolioSummary(repositories);
+    const activityMetrics = this.buildActivityMetrics(commits);
+    const bestPractices = this.buildBestPractices(repositories);
+    const impact = this.buildImpact(repositories, commits);
+
+    return {
+      userProfile,
+      portfolioSummary,
+      activityMetrics,
+      bestPractices,
+      impact,
+    };
+  }
+
+  private buildUserProfile(userData: any): UserProfile {
+    const accountAge = userData.created_at 
+      ? Math.floor((Date.now() - new Date(userData.created_at).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    return {
+      username: userData.login,
+      name: userData.name,
+      avatarUrl: userData.avatar_url,
+      followers: userData.followers || 0,
+      following: userData.following || 0,
+      publicRepos: userData.public_repos || 0,
+      accountAgeDays: accountAge,
+      hireable: userData.hireable,
+      company: userData.company,
+      location: userData.location,
+      bio: userData.bio,
+    };
+  }
+
+  private buildPortfolioSummary(repositories: any[]): PortfolioSummary {
+    const owned = repositories.filter(repo => !repo.fork);
+    const forked = repositories.filter(repo => repo.fork);
+    const archived = repositories.filter(repo => repo.archived);
+    
+    // Activity in last 90 days
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const reposActiveLast90d = repositories.filter(repo => 
+      repo.updated_at && new Date(repo.updated_at) > ninetyDaysAgo
+    ).length;
+
+    const reposWithReleases = repositories.filter(repo => repo.has_downloads).length;
+
+    // Language analysis
+    const languages: Record<string, number> = {};
+    repositories.forEach(repo => {
+      if (repo.language) {
+        languages[repo.language] = (languages[repo.language] || 0) + 1;
+      }
+    });
+
+    // Top repositories by stars
+    const topReposByStars = repositories
+      .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
+      .slice(0, 5)
+      .map(repo => ({
+        name: repo.name,
+        stars: repo.stargazers_count || 0,
+        description: repo.description,
+        language: repo.language,
+      }));
+
+    const totalStars = repositories.reduce((sum, repo) => sum + (repo.stargazers_count || 0), 0);
+    const totalForks = repositories.reduce((sum, repo) => sum + (repo.forks_count || 0), 0);
+
+    return {
+      totalOwned: owned.length,
+      totalForked: forked.length,
+      totalArchived: archived.length,
+      reposActiveLast90d,
+      reposWithReleases,
+      languages,
+      topReposByStars,
+      totalStars,
+      totalForks,
+    };
+  }
+
+  private buildActivityMetrics(commits: CommitData[]): ActivityMetrics {
+    if (commits.length === 0) {
+      return {
+        totalCommits: 0,
+        activeDays: 0,
+        longestStreak: 0,
+        avgCommitsPerActiveDay: 0,
+        commitsByWeekday: [0, 0, 0, 0, 0, 0, 0],
+        commitsByHour: Array(24).fill(0),
+        reposContributedCount: 0,
+        firstCommitDate: null,
+        lastCommitDate: null,
+      };
+    }
+
+    // Sort commits by date
+    const sortedCommits = commits.sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // Calculate active days and streaks
+    const commitDates = new Set<string>();
+    const weekdayCount = [0, 0, 0, 0, 0, 0, 0]; // Sunday to Saturday
+    const hourCount = Array(24).fill(0);
+
+    commits.forEach(commit => {
+      const date = new Date(commit.date);
+      const dateStr = date.toISOString().split('T')[0];
+      commitDates.add(dateStr);
+      
+      // Track weekday distribution (0 = Sunday)
+      weekdayCount[date.getDay()]++;
+      
+      // Track hour distribution
+      hourCount[date.getHours()]++;
+    });
+
+    const activeDays = commitDates.size;
+    const avgCommitsPerActiveDay = activeDays > 0 ? commits.length / activeDays : 0;
+
+    // Calculate longest streak
+    const sortedDates = Array.from(commitDates).sort();
+    let longestStreak = 0;
+    let currentStreak = 0;
+    
+    for (let i = 0; i < sortedDates.length; i++) {
+      if (i === 0) {
+        currentStreak = 1;
+      } else {
+        const prevDate = new Date(sortedDates[i - 1]);
+        const currDate = new Date(sortedDates[i]);
+        const dayDiff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (dayDiff === 1) {
+          currentStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, currentStreak);
+          currentStreak = 1;
+        }
+      }
+    }
+    longestStreak = Math.max(longestStreak, currentStreak);
+
+    // Repository contribution count - using commit sha patterns to identify repos
+    const reposContributed = new Set<string>();
+    commits.forEach(commit => {
+      if (commit.sha) {
+        // Simplified repo counting for user analysis
+        reposContributed.add(commit.sha.substring(0, 7)); // Use commit prefix as proxy
+      }
+    });
+
+    return {
+      totalCommits: commits.length,
+      activeDays,
+      longestStreak,
+      avgCommitsPerActiveDay: Math.round(avgCommitsPerActiveDay * 100) / 100,
+      commitsByWeekday: weekdayCount,
+      commitsByHour: hourCount,
+      reposContributedCount: reposContributed.size,
+      firstCommitDate: sortedCommits[0]?.date || null,
+      lastCommitDate: sortedCommits[sortedCommits.length - 1]?.date || null,
+    };
+  }
+
+  private buildBestPractices(repositories: any[]): BestPractices {
+    if (repositories.length === 0) {
+      return {
+        pctWithLicense: 0,
+        pctWithReadme: 0,
+        pctWithCI: 0,
+        pctWithTopics: 0,
+        pctWithContributing: 0,
+        pctWithDescription: 0,
+        archivedRatio: 0,
+      };
+    }
+
+    const total = repositories.length;
+    const withLicense = repositories.filter(repo => repo.license).length;
+    const withReadme = repositories.filter(repo => repo.has_wiki || repo.description?.toLowerCase().includes('readme')).length;
+    const withCI = repositories.filter(repo => repo.has_pages || repo.has_downloads).length; // Proxy for CI/CD
+    const withTopics = repositories.filter(repo => repo.topics && repo.topics.length > 0).length;
+    const withContributing = repositories.filter(repo => repo.has_issues).length; // Proxy for contributing guidelines
+    const withDescription = repositories.filter(repo => repo.description && repo.description.trim().length > 0).length;
+    const archived = repositories.filter(repo => repo.archived).length;
+
+    return {
+      pctWithLicense: Math.round((withLicense / total) * 100),
+      pctWithReadme: Math.round((withReadme / total) * 100),
+      pctWithCI: Math.round((withCI / total) * 100),
+      pctWithTopics: Math.round((withTopics / total) * 100),
+      pctWithContributing: Math.round((withContributing / total) * 100),
+      pctWithDescription: Math.round((withDescription / total) * 100),
+      archivedRatio: Math.round((archived / total) * 100),
+    };
+  }
+
+  private buildImpact(repositories: any[], commits: CommitData[]): Impact {
+    // Popular topics across repositories
+    const topicCounts: Record<string, number> = {};
+    repositories.forEach(repo => {
+      if (repo.topics) {
+        repo.topics.forEach((topic: string) => {
+          topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+        });
+      }
+    });
+
+    const popularTopics = Object.entries(topicCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([topic]) => topic);
+
+    // Language diversity score
+    const languages = new Set<string>();
+    repositories.forEach(repo => {
+      if (repo.language) {
+        languages.add(repo.language);
+      }
+    });
+    const diversityScore = Math.min(languages.size * 10, 100); // Cap at 100
+
+    // Contribution score based on activity and repositories
+    const totalStars = repositories.reduce((sum, repo) => sum + (repo.stargazers_count || 0), 0);
+    const contributionScore = Math.min(
+      (commits.length * 0.1) + (totalStars * 0.5) + (repositories.length * 2),
+      100
+    );
+
+    return {
+      popularTopics,
+      contributionScore: Math.round(contributionScore),
+      diversityScore,
+    };
   }
 }

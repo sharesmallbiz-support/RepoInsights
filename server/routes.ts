@@ -3,12 +3,15 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
   AnalysisRequestSchema, 
-  type AnalysisResponse, 
+  type AnalysisResponse,
+  type RepositoryAnalysisResponse,
+  type UserAnalysisResponse,
   type DoraMetrics, 
   type HealthMetrics, 
   type Contributor, 
   type TimelineDay, 
-  type WorkClassification 
+  type WorkClassification,
+  type UserAnalysis 
 } from "@shared/schema";
 import { GitHubAnalyzer } from "./lib/github-analyzer";
 
@@ -34,20 +37,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hoursSinceAnalysis = (Date.now() - new Date(existingAnalysis.createdAt).getTime()) / (1000 * 60 * 60);
         if (hoursSinceAnalysis < 1) { // Cache for 1 hour
           console.log(`Returning cached analysis for ${url}`);
-          const response: AnalysisResponse = {
-            id: existingAnalysis.id,
-            repositoryUrl: existingAnalysis.repositoryUrl,
-            repositoryName: existingAnalysis.repositoryName,
-            repositoryOwner: existingAnalysis.repositoryOwner,
-            analysisType: existingAnalysis.analysisType,
-            doraMetrics: existingAnalysis.doraMetrics as DoraMetrics,
-            healthMetrics: existingAnalysis.healthMetrics as HealthMetrics,
-            contributors: existingAnalysis.contributorsData as Contributor[],
-            timeline: existingAnalysis.timelineData as TimelineDay[],
-            workClassification: existingAnalysis.workClassification as WorkClassification,
-            createdAt: existingAnalysis.createdAt.toISOString(),
-          };
-          return res.json(response);
+          
+          // Return appropriate response type based on analysis type
+          if (existingAnalysis.analysisType === 'user') {
+            const userResponse: UserAnalysisResponse = {
+              id: existingAnalysis.id,
+              userUrl: existingAnalysis.userUrl!,
+              username: existingAnalysis.username!,
+              analysisType: 'user',
+              userAnalysis: existingAnalysis.userAnalysisData as UserAnalysis,
+              createdAt: existingAnalysis.createdAt.toISOString(),
+            };
+            return res.json(userResponse);
+          } else {
+            const repoResponse: RepositoryAnalysisResponse = {
+              id: existingAnalysis.id,
+              repositoryUrl: existingAnalysis.repositoryUrl!,
+              repositoryName: existingAnalysis.repositoryName!,
+              repositoryOwner: existingAnalysis.repositoryOwner!,
+              analysisType: 'repository',
+              doraMetrics: existingAnalysis.doraMetrics as DoraMetrics,
+              healthMetrics: existingAnalysis.healthMetrics as HealthMetrics,
+              contributors: existingAnalysis.contributorsData as Contributor[],
+              timeline: existingAnalysis.timelineData as TimelineDay[],
+              workClassification: existingAnalysis.workClassification as WorkClassification,
+              createdAt: existingAnalysis.createdAt.toISOString(),
+            };
+            return res.json(repoResponse);
+          }
         }
       }
 
@@ -100,25 +117,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           commitsData: commits,
         };
       } else {
-        // User analysis
+        // User analysis - return different response structure
         const { owner } = parseResult;
         console.log(`Analyzing user: ${owner}`);
         
         const userAnalysisResult = await analyzer.analyzeUser(owner);
         
-        doraMetrics = userAnalysisResult.doraMetrics;
-        healthMetrics = userAnalysisResult.healthMetrics;
-        contributors = userAnalysisResult.contributors;
-        timeline = userAnalysisResult.timeline;
-        workClassification = userAnalysisResult.workClassification;
-        
-        repositoryName = `${owner} (${userAnalysisResult.totalRepositories} repositories)`;
-        repositoryOwner = owner;
-        analysisSpecificData = {
-          userData: userAnalysisResult.userData,
-          repositories: userAnalysisResult.repositories,
-          totalRepositories: userAnalysisResult.totalRepositories,
+        // Store user analysis
+        const userAnalysisData = {
+          userUrl: url,
+          username: owner,
+          analysisType: parseResult.type,
+          userAnalysisData: userAnalysisResult.userAnalysis,
         };
+
+        const savedAnalysis = await storage.createAnalysis(userAnalysisData);
+        
+        // Return user-specific response
+        const userResponse: UserAnalysisResponse = {
+          id: savedAnalysis.id,
+          userUrl: url,
+          username: owner,
+          analysisType: 'user',
+          userAnalysis: userAnalysisResult.userAnalysis,
+          createdAt: savedAnalysis.createdAt!.toISOString(),
+        };
+
+        console.log(`User analysis completed for ${url}`);
+        return res.json(userResponse);
       }
 
       // Store analysis results
@@ -137,13 +163,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const savedAnalysis = await storage.createAnalysis(analysisData);
       
-      // Format response
-      const response: AnalysisResponse = {
+      // Format repository analysis response
+      const response: RepositoryAnalysisResponse = {
         id: savedAnalysis.id,
-        repositoryUrl: savedAnalysis.repositoryUrl,
-        repositoryName: savedAnalysis.repositoryName,
-        repositoryOwner: savedAnalysis.repositoryOwner,
-        analysisType: savedAnalysis.analysisType,
+        repositoryUrl: savedAnalysis.repositoryUrl!,
+        repositoryName: savedAnalysis.repositoryName!,
+        repositoryOwner: savedAnalysis.repositoryOwner!,
+        analysisType: 'repository',
         doraMetrics: doraMetrics,
         healthMetrics: healthMetrics,
         contributors: contributors,
@@ -152,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: savedAnalysis.createdAt!.toISOString(),
       };
 
-      console.log(`Analysis completed for ${url}`);
+      console.log(`Repository analysis completed for ${url}`);
       res.json(response);
 
     } catch (error: any) {
@@ -161,8 +187,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle specific GitHub API errors
       if (error.message.includes('not found')) {
         return res.status(404).json({
-          error: "Repository not found",
-          message: "The specified repository could not be found or is not publicly accessible."
+          error: "Resource not found",
+          message: "The specified repository or user could not be found or is not publicly accessible."
         });
       }
       
@@ -197,19 +223,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Analysis not found" });
       }
 
-      const response: AnalysisResponse = {
-        id: analysis.id,
-        repositoryUrl: analysis.repositoryUrl,
-        repositoryName: analysis.repositoryName,
-        repositoryOwner: analysis.repositoryOwner,
-        analysisType: analysis.analysisType,
-        doraMetrics: analysis.doraMetrics as DoraMetrics,
-        healthMetrics: analysis.healthMetrics as HealthMetrics,
-        contributors: analysis.contributorsData as Contributor[],
-        timeline: analysis.timelineData as TimelineDay[],
-        workClassification: analysis.workClassification as WorkClassification,
-        createdAt: analysis.createdAt!.toISOString(),
-      };
+      // Return appropriate response type based on analysis type
+      let response: AnalysisResponse;
+      
+      if (analysis.analysisType === 'user') {
+        response = {
+          id: analysis.id,
+          userUrl: analysis.userUrl!,
+          username: analysis.username!,
+          analysisType: 'user',
+          userAnalysis: analysis.userAnalysisData as UserAnalysis,
+          createdAt: analysis.createdAt!.toISOString(),
+        } as UserAnalysisResponse;
+      } else {
+        response = {
+          id: analysis.id,
+          repositoryUrl: analysis.repositoryUrl!,
+          repositoryName: analysis.repositoryName!,
+          repositoryOwner: analysis.repositoryOwner!,
+          analysisType: 'repository',
+          doraMetrics: analysis.doraMetrics as DoraMetrics,
+          healthMetrics: analysis.healthMetrics as HealthMetrics,
+          contributors: analysis.contributorsData as Contributor[],
+          timeline: analysis.timelineData as TimelineDay[],
+          workClassification: analysis.workClassification as WorkClassification,
+          createdAt: analysis.createdAt!.toISOString(),
+        } as RepositoryAnalysisResponse;
+      }
 
       res.json(response);
     } catch (error: any) {
