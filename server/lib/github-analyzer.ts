@@ -1,4 +1,6 @@
 import { getUncachableGitHubClient } from './github-client';
+import { MemoryCache } from './memory-cache';
+import { ApiStatsTracker } from './api-stats';
 import type { 
   DoraMetrics, 
   HealthMetrics, 
@@ -33,13 +35,60 @@ interface CommitData {
 
 export class GitHubAnalyzer {
   private client: any;
+  private cache: MemoryCache;
+  private stats: ApiStatsTracker;
 
   constructor() {
     this.client = null;
+    this.cache = new MemoryCache(10 * 60 * 1000); // 10 minute cache
+    this.stats = new ApiStatsTracker();
+    
+    // Run cleanup every 5 minutes
+    setInterval(() => {
+      this.cache.cleanup();
+    }, 5 * 60 * 1000);
   }
 
   async initialize() {
     this.client = await getUncachableGitHubClient();
+  }
+
+  private async cachedApiCall<T>(
+    cacheKey: string, 
+    apiCall: () => Promise<T>, 
+    endpoint: string,
+    ttl?: number
+  ): Promise<T> {
+    // Check cache first
+    const cached = this.cache.get<T>(cacheKey);
+    if (cached !== null) {
+      this.stats.trackCall(endpoint, 'GET', true);
+      return cached;
+    }
+
+    // Make API call
+    const startTime = Date.now();
+    try {
+      const result = await apiCall();
+      const responseTime = Date.now() - startTime;
+      
+      // Cache the result
+      this.cache.set(cacheKey, result, ttl);
+      this.stats.trackCall(endpoint, 'GET', false, responseTime);
+      
+      return result;
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      this.stats.trackCall(endpoint, 'GET', false, responseTime);
+      throw error;
+    }
+  }
+
+  getApiStats() {
+    return {
+      cache: this.cache.getStats(),
+      api: this.stats.getStats(),
+    };
   }
 
   parseGitHubUrl(url: string): GitHubRepoData {
@@ -70,165 +119,207 @@ export class GitHubAnalyzer {
   }
 
   async fetchRepositoryData(owner: string, repo: string) {
-    try {
-      const { data: repository } = await this.client.repos.get({
-        owner,
-        repo,
-      });
-      return repository;
-    } catch (error: any) {
-      if (error.status === 404) {
-        throw new Error(`Repository ${owner}/${repo} not found or not accessible`);
-      }
-      throw new Error(`Failed to fetch repository: ${error.message}`);
-    }
+    const cacheKey = `repo:${owner}/${repo}`;
+    return this.cachedApiCall(
+      cacheKey,
+      async () => {
+        try {
+          const { data: repository } = await this.client.repos.get({
+            owner,
+            repo,
+          });
+          return repository;
+        } catch (error: any) {
+          if (error.status === 404) {
+            throw new Error(`Repository ${owner}/${repo} not found or not accessible`);
+          }
+          throw new Error(`Failed to fetch repository: ${error.message}`);
+        }
+      },
+      `repos.get:${owner}/${repo}`
+    );
   }
 
   async fetchUserData(username: string) {
-    try {
-      const { data: user } = await this.client.users.getByUsername({
-        username,
-      });
-      return user;
-    } catch (error: any) {
-      if (error.status === 404) {
-        throw new Error(`User ${username} not found or not accessible`);
-      }
-      throw new Error(`Failed to fetch user: ${error.message}`);
-    }
+    const cacheKey = `user:${username}`;
+    return this.cachedApiCall(
+      cacheKey,
+      async () => {
+        try {
+          const { data: user } = await this.client.users.getByUsername({
+            username,
+          });
+          return user;
+        } catch (error: any) {
+          if (error.status === 404) {
+            throw new Error(`User ${username} not found or not accessible`);
+          }
+          throw new Error(`Failed to fetch user: ${error.message}`);
+        }
+      },
+      `users.getByUsername:${username}`
+    );
   }
 
   async fetchUserOrganizations(username: string): Promise<any[]> {
-    try {
-      const { data: orgs } = await this.client.orgs.listForUser({
-        username,
-        per_page: 20,
-      });
-      console.log(`Fetched ${orgs.length} organizations for user ${username}`);
-      return orgs;
-    } catch (error: any) {
-      console.warn(`Could not fetch organizations for ${username}:`, error.message);
-      return []; // Return empty array if organizations are private or error occurs
-    }
+    const cacheKey = `user-orgs:${username}`;
+    return this.cachedApiCall(
+      cacheKey,
+      async () => {
+        try {
+          const { data: orgs } = await this.client.orgs.listForUser({
+            username,
+            per_page: 20,
+          });
+          console.log(`Fetched ${orgs.length} organizations for user ${username}`);
+          return orgs;
+        } catch (error: any) {
+          console.warn(`Could not fetch organizations for ${username}:`, error.message);
+          return []; // Return empty array if organizations are private or error occurs
+        }
+      },
+      `orgs.listForUser:${username}`,
+      5 * 60 * 1000 // 5 minute cache for organizations
+    );
   }
 
   async fetchUserRepositories(username: string, maxRepos: number = 25): Promise<any[]> {
-    try {
-      const repos: any[] = [];
-      let page = 1;
-      const perPage = 30;
+    const cacheKey = `user-repos:${username}:${maxRepos}`;
+    return this.cachedApiCall(
+      cacheKey,
+      async () => {
+        try {
+          const repos: any[] = [];
+          let page = 1;
+          const perPage = 30;
 
-      while (repos.length < maxRepos) {
-        const { data: repoPage } = await this.client.repos.listForUser({
-          username,
-          type: 'owner',
-          sort: 'updated',
-          per_page: perPage,
-          page,
-        });
+          while (repos.length < maxRepos) {
+            const { data: repoPage } = await this.client.repos.listForUser({
+              username,
+              type: 'owner',
+              sort: 'updated',
+              per_page: perPage,
+              page,
+            });
 
-        if (repoPage.length === 0) break;
+            if (repoPage.length === 0) break;
 
-        repos.push(...repoPage.slice(0, maxRepos - repos.length));
-        page++;
+            repos.push(...repoPage.slice(0, maxRepos - repos.length));
+            page++;
 
-        if (repoPage.length < perPage) break;
-      }
+            if (repoPage.length < perPage) break;
+          }
 
-      // Keep both original and forked repositories, but prioritize original ones
-      const originalRepos = repos.filter(repo => !repo.fork);
-      const forkedRepos = repos.filter(repo => repo.fork);
-      
-      console.log(`Fetched ${originalRepos.length} original and ${forkedRepos.length} forked repositories for user ${username}`);
-      
-      // Return up to maxRepos repositories, prioritizing original repositories
-      const prioritizedRepos = [...originalRepos, ...forkedRepos];
-      return prioritizedRepos.slice(0, Math.min(maxRepos, prioritizedRepos.length));
-    } catch (error: any) {
-      throw new Error(`Failed to fetch user repositories: ${error.message}`);
-    }
+          // Keep both original and forked repositories, but prioritize original ones
+          const originalRepos = repos.filter(repo => !repo.fork);
+          const forkedRepos = repos.filter(repo => repo.fork);
+          
+          console.log(`Fetched ${originalRepos.length} original and ${forkedRepos.length} forked repositories for user ${username}`);
+          
+          // Return up to maxRepos repositories, prioritizing original repositories
+          const prioritizedRepos = [...originalRepos, ...forkedRepos];
+          return prioritizedRepos.slice(0, Math.min(maxRepos, prioritizedRepos.length));
+        } catch (error: any) {
+          throw new Error(`Failed to fetch user repositories: ${error.message}`);
+        }
+      },
+      `repos.listForUser:${username}`,
+      8 * 60 * 1000 // 8 minute cache for user repositories
+    );
   }
 
   async fetchCommits(owner: string, repo: string, since?: Date): Promise<CommitData[]> {
-    const commits: CommitData[] = [];
-    const perPage = 50; // Reduced to minimize rate limit impact
-    let page = 1;
-    const maxCommits = 500; // Reduced limit for better performance and rate limiting
-    const maxDetailedCommits = 100; // Only fetch detailed stats for recent commits
+    const sinceStr = since?.toISOString() || 'all';
+    const cacheKey = `commits:${owner}/${repo}:${sinceStr}`;
     
-    try {
-      while (commits.length < maxCommits) {
-        const { data: commitPage } = await this.client.repos.listCommits({
-          owner,
-          repo,
-          per_page: perPage,
-          page,
-          since: since?.toISOString(),
-        });
-
-        if (commitPage.length === 0) break;
-
-        for (const commit of commitPage) {
-          // Only fetch detailed commit info for the most recent commits to avoid rate limiting
-          if (commits.length < maxDetailedCommits) {
-            try {
-              const { data: commitDetails } = await this.client.repos.getCommit({
-                owner,
-                repo,
-                ref: commit.sha,
-              });
-
-              commits.push({
-                sha: commit.sha,
-                message: commit.commit.message,
-                author: commit.commit.author?.name || 'Unknown',
-                email: commit.commit.author?.email || '',
-                date: commit.commit.author?.date || '',
-                additions: commitDetails.stats?.additions || 0,
-                deletions: commitDetails.stats?.deletions || 0,
-                changedFiles: commitDetails.files?.length || 0,
-              });
-            } catch (error) {
-              // Skip commits we can't fetch details for and continue with basic data
-              console.warn(`Could not fetch details for commit ${commit.sha}, using basic data`);
-              commits.push({
-                sha: commit.sha,
-                message: commit.commit.message,
-                author: commit.commit.author?.name || 'Unknown',
-                email: commit.commit.author?.email || '',
-                date: commit.commit.author?.date || '',
-                additions: 0, // Default to 0 if we can't get stats
-                deletions: 0,
-                changedFiles: 1, // Assume 1 file changed as minimum
-              });
-            }
-          } else {
-            // For older commits, just use basic data to avoid excessive API calls
-            commits.push({
-              sha: commit.sha,
-              message: commit.commit.message,
-              author: commit.commit.author?.name || 'Unknown',
-              email: commit.commit.author?.email || '',
-              date: commit.commit.author?.date || '',
-              additions: 0,
-              deletions: 0,
-              changedFiles: 1,
+    return this.cachedApiCall(
+      cacheKey,
+      async () => {
+        const commits: CommitData[] = [];
+        const perPage = 50; // Reduced to minimize rate limit impact
+        let page = 1;
+        const maxCommits = 500; // Reduced limit for better performance and rate limiting
+        const maxDetailedCommits = 100; // Only fetch detailed stats for recent commits
+        
+        try {
+          while (commits.length < maxCommits) {
+            const { data: commitPage } = await this.client.repos.listCommits({
+              owner,
+              repo,
+              per_page: perPage,
+              page,
+              since: since?.toISOString(),
             });
-          }
-        }
 
-        page++;
-        if (commitPage.length < perPage) break;
-      }
-      
-      console.log(`Fetched ${commits.length} commits (${Math.min(commits.length, maxDetailedCommits)} with detailed stats)`);
-      return commits;
-    } catch (error: any) {
-      if (error.message.includes('rate limit')) {
-        throw new Error('GitHub API rate limit exceeded. Please try again later.');
-      }
-      throw new Error(`Failed to fetch commits: ${error.message}`);
-    }
+            if (commitPage.length === 0) break;
+
+            for (const commit of commitPage) {
+              // Only fetch detailed commit info for the most recent commits to avoid rate limiting
+              if (commits.length < maxDetailedCommits) {
+                try {
+                  const { data: commitDetails } = await this.client.repos.getCommit({
+                    owner,
+                    repo,
+                    ref: commit.sha,
+                  });
+
+                  commits.push({
+                    sha: commit.sha,
+                    message: commit.commit.message,
+                    author: commit.commit.author?.name || 'Unknown',
+                    email: commit.commit.author?.email || '',
+                    date: commit.commit.author?.date || '',
+                    additions: commitDetails.stats?.additions || 0,
+                    deletions: commitDetails.stats?.deletions || 0,
+                    changedFiles: commitDetails.files?.length || 0,
+                  });
+                } catch (error) {
+                  // Skip commits we can't fetch details for and continue with basic data
+                  console.warn(`Could not fetch details for commit ${commit.sha}, using basic data`);
+                  commits.push({
+                    sha: commit.sha,
+                    message: commit.commit.message,
+                    author: commit.commit.author?.name || 'Unknown',
+                    email: commit.commit.author?.email || '',
+                    date: commit.commit.author?.date || '',
+                    additions: 0,
+                    deletions: 0,
+                    changedFiles: 1,
+                  });
+                }
+              } else {
+                // For older commits, just use basic data to avoid excessive API calls
+                commits.push({
+                  sha: commit.sha,
+                  message: commit.commit.message,
+                  author: commit.commit.author?.name || 'Unknown',
+                  email: commit.commit.author?.email || '',
+                  date: commit.commit.author?.date || '',
+                  additions: 0,
+                  deletions: 0,
+                  changedFiles: 1,
+                });
+              }
+
+              if (commits.length >= maxCommits) break;
+            }
+
+            page++;
+            if (commitPage.length < perPage) break;
+          }
+
+          console.log(`Fetched ${commits.length} commits (${Math.min(commits.length, maxDetailedCommits)} with detailed stats)`);
+          return commits;
+        } catch (error: any) {
+          if (error.message.includes('rate limit')) {
+            throw new Error('GitHub API rate limit exceeded. Please try again later.');
+          }
+          throw new Error(`Failed to fetch commits: ${error.message}`);
+        }
+      },
+      `repos.listCommits:${owner}/${repo}`,
+      3 * 60 * 1000 // 3 minute cache for commits (shorter because they change frequently)
+    );
   }
 
   calculateDoraMetrics(commits: CommitData[]): DoraMetrics {

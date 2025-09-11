@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Github, BarChart3, Users, Heart, GitBranch, PieChart, Calendar } from 'lucide-react';
+import { Github, BarChart3, Users, Heart, GitBranch, PieChart, Calendar, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ import UserPortfolio from '@/components/user/UserPortfolio';
 import UserActivity from '@/components/user/UserActivity';
 import UserBestPractices from '@/components/user/UserBestPractices';
 import UserImpact from '@/components/user/UserImpact';
+import ApiStats from '@/components/ApiStats';
 import { apiRequest } from '@/lib/queryClient';
 import type { AnalysisResponse, RepositoryAnalysisResponse, UserAnalysisResponse } from '@shared/schema';
 
@@ -202,7 +203,7 @@ export default function Dashboard() {
           /* Analysis Results */
           <div className="space-y-8">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="overview" className="flex items-center gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Overview
@@ -226,6 +227,10 @@ export default function Dashboard() {
                 <TabsTrigger value="classification" className="flex items-center gap-2">
                   <PieChart className="h-4 w-4" />
                   Work Analysis
+                </TabsTrigger>
+                <TabsTrigger value="stats" className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  API Stats
                 </TabsTrigger>
               </TabsList>
 
@@ -292,6 +297,10 @@ export default function Dashboard() {
                     <UserImpact impact={(analysis.data as UserAnalysisResponse).userAnalysis.impact} />
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="stats" className="mt-8">
+                <ApiStats />
               </TabsContent>
             </Tabs>
           </div>

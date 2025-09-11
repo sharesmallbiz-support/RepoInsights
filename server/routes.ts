@@ -280,6 +280,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API Statistics endpoint
+  app.get("/api/stats", async (req, res) => {
+    try {
+      const analyzer = new GitHubAnalyzer();
+      await analyzer.initialize();
+      const stats = analyzer.getApiStats();
+      
+      res.json({
+        success: true,
+        stats,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("Error fetching API stats:", error);
+      res.status(500).json({
+        error: "Failed to fetch API statistics",
+        details: error.message
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
