@@ -55,39 +55,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const analyzer = new GitHubAnalyzer();
       await analyzer.initialize();
 
-      // Parse GitHub URL
-      const repoData = analyzer.parseGitHubUrl(url);
+      // Parse GitHub URL to determine type (repository or user)
+      const parseResult = analyzer.parseGitHubUrl(url);
       
-      // Fetch repository data
-      const repositoryData = await analyzer.fetchRepositoryData(repoData.owner, repoData.repo);
-      
-      // Fetch commits (last 90 days for reasonable performance)
-      const sinceDate = new Date();
-      sinceDate.setDate(sinceDate.getDate() - 90);
-      const commits = await analyzer.fetchCommits(repoData.owner, repoData.repo, sinceDate);
-      
-      console.log(`Fetched ${commits.length} commits for analysis`);
+      let doraMetrics: DoraMetrics;
+      let healthMetrics: HealthMetrics;
+      let contributors: Contributor[];
+      let timeline: TimelineDay[];
+      let workClassification: WorkClassification;
+      let repositoryName: string;
+      let repositoryOwner: string;
+      let analysisSpecificData: any = {};
 
-      // Calculate all metrics
-      const doraMetrics = analyzer.calculateDoraMetrics(commits);
-      const healthMetrics = analyzer.calculateHealthMetrics(commits, repositoryData);
-      const contributors = analyzer.calculateContributors(commits);
-      const timeline = analyzer.calculateTimeline(commits);
-      const workClassification = analyzer.calculateWorkClassification(commits);
+      if (parseResult.type === 'repository') {
+        // Repository analysis
+        const { owner, repo } = parseResult;
+        if (!repo) {
+          throw new Error('Repository name is required for repository analysis');
+        }
+
+        console.log(`Analyzing repository: ${owner}/${repo}`);
+
+        // Fetch repository data
+        const repositoryData = await analyzer.fetchRepositoryData(owner, repo);
+        
+        // Fetch commits for the last 90 days
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 90);
+        const commits = await analyzer.fetchCommits(owner, repo, sinceDate);
+        
+        console.log(`Fetched ${commits.length} commits for analysis`);
+
+        // Calculate metrics
+        doraMetrics = analyzer.calculateDoraMetrics(commits);
+        healthMetrics = analyzer.calculateHealthMetrics(commits, repositoryData);
+        contributors = analyzer.calculateContributors(commits);
+        timeline = analyzer.calculateTimeline(commits);
+        workClassification = analyzer.calculateWorkClassification(commits);
+        
+        repositoryName = repo;
+        repositoryOwner = owner;
+        analysisSpecificData = {
+          repositoryData: repositoryData,
+          commitsData: commits,
+        };
+      } else {
+        // User analysis
+        const { owner } = parseResult;
+        console.log(`Analyzing user: ${owner}`);
+        
+        const userAnalysisResult = await analyzer.analyzeUser(owner);
+        
+        doraMetrics = userAnalysisResult.doraMetrics;
+        healthMetrics = userAnalysisResult.healthMetrics;
+        contributors = userAnalysisResult.contributors;
+        timeline = userAnalysisResult.timeline;
+        workClassification = userAnalysisResult.workClassification;
+        
+        repositoryName = `${owner} (${userAnalysisResult.totalRepositories} repositories)`;
+        repositoryOwner = owner;
+        analysisSpecificData = {
+          userData: userAnalysisResult.userData,
+          repositories: userAnalysisResult.repositories,
+          totalRepositories: userAnalysisResult.totalRepositories,
+        };
+      }
 
       // Store analysis results
       const analysisData = {
         repositoryUrl: url,
-        repositoryName: repositoryData.name,
-        repositoryOwner: repositoryData.owner.login,
-        analysisType: type,
-        repositoryData: repositoryData,
-        commitsData: commits,
+        repositoryName: repositoryName,
+        repositoryOwner: repositoryOwner,
+        analysisType: parseResult.type,
         contributorsData: contributors,
         doraMetrics: doraMetrics,
         healthMetrics: healthMetrics,
         timelineData: timeline,
         workClassification: workClassification,
+        ...analysisSpecificData,
       };
 
       const savedAnalysis = await storage.createAnalysis(analysisData);

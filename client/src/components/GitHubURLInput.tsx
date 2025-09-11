@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 
 interface GitHubURLInputProps {
-  onAnalyze?: (url: string, type: 'repository') => void;
+  onAnalyze?: (url: string, type: 'repository' | 'user') => void;
   isLoading?: boolean;
 }
 
@@ -13,16 +13,29 @@ export default function GitHubURLInput({ onAnalyze, isLoading = false }: GitHubU
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
 
-  const detectUrlType = (url: string): 'repository' | null => {
-    const githubPattern = /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/?$/;
-    const match = url.match(githubPattern);
+  const detectUrlType = (url: string): 'repository' | 'user' | null => {
+    // Repository URL: https://github.com/owner/repo
+    const repoPattern = /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/?$/;
+    const repoMatch = url.match(repoPattern);
     
-    if (!match) return null;
-    
-    const [, owner, repo] = match;
-    if (owner && repo && !repo.includes('/')) {
-      return 'repository';
+    if (repoMatch) {
+      const [, owner, repo] = repoMatch;
+      if (owner && repo && !repo.includes('/')) {
+        return 'repository';
+      }
     }
+    
+    // User URL: https://github.com/username
+    const userPattern = /^https:\/\/github\.com\/([^\/]+)\/?$/;
+    const userMatch = url.match(userPattern);
+    
+    if (userMatch) {
+      const [, username] = userMatch;
+      if (username && !username.includes('/')) {
+        return 'user';
+      }
+    }
+    
     return null;
   };
 
@@ -37,7 +50,7 @@ export default function GitHubURLInput({ onAnalyze, isLoading = false }: GitHubU
 
     const type = detectUrlType(url);
     if (!type) {
-      setError('Please enter a valid GitHub URL (e.g., https://github.com/owner/repo)');
+      setError('Please enter a valid GitHub URL (repository: github.com/owner/repo or user: github.com/username)');
       return;
     }
 
@@ -85,12 +98,14 @@ export default function GitHubURLInput({ onAnalyze, isLoading = false }: GitHubU
         )}
         
         <div className="text-sm text-muted-foreground">
-          <p className="mb-2">Supported URL format:</p>
+          <p className="mb-2">Supported URL formats:</p>
           <ul className="space-y-1 ml-4">
             <li>• Repository: https://github.com/owner/repository</li>
+            <li>• User: https://github.com/username</li>
           </ul>
           <p className="mt-2 text-xs">
-            <strong>Note:</strong> Organization and user analysis will be available in future updates.
+            <strong>Repository Analysis:</strong> Analyzes commits, contributors, and metrics for a specific repository.<br/>
+            <strong>User Analysis:</strong> Aggregates metrics across all public repositories for a user.
           </p>
         </div>
       </form>

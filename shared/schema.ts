@@ -105,7 +105,7 @@ export const WorkClassificationSchema = z.object({
 // Analysis Request/Response Types
 export const AnalysisRequestSchema = z.object({
   url: z.string().url(),
-  type: z.enum(['repository']), // Only repository analysis supported for now
+  type: z.enum(['repository', 'user']), // Support both repository and user analysis
 });
 
 export const AnalysisResponseSchema = z.object({

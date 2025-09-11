@@ -9,8 +9,9 @@ import type {
 
 interface GitHubRepoData {
   owner: string;
-  repo: string;
+  repo?: string;
   url: string;
+  type: 'repository' | 'user';
 }
 
 interface CommitData {
@@ -36,17 +37,30 @@ export class GitHubAnalyzer {
   }
 
   parseGitHubUrl(url: string): GitHubRepoData {
-    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
-    if (!match) {
-      throw new Error('Invalid GitHub URL format');
+    // Repository URL: https://github.com/owner/repo
+    const repoMatch = url.match(/github\.com\/([^\/]+)\/([^\/]+)\/?$/);
+    if (repoMatch) {
+      const [, owner, repo] = repoMatch;
+      return {
+        owner: owner.trim(),
+        repo: repo.replace(/\.git$/, '').trim(),
+        url: url.trim(),
+        type: 'repository'
+      };
     }
     
-    const [, owner, repo] = match;
-    return {
-      owner: owner.trim(),
-      repo: repo.replace('.git', '').trim(),
-      url: url.trim()
-    };
+    // User URL: https://github.com/username
+    const userMatch = url.match(/github\.com\/([^\/]+)\/?$/);
+    if (userMatch) {
+      const [, owner] = userMatch;
+      return {
+        owner: owner.trim(),
+        url: url.trim(),
+        type: 'user'
+      };
+    }
+    
+    throw new Error('Invalid GitHub URL format. Expected repository (github.com/owner/repo) or user (github.com/username)');
   }
 
   async fetchRepositoryData(owner: string, repo: string) {
@@ -61,6 +75,53 @@ export class GitHubAnalyzer {
         throw new Error(`Repository ${owner}/${repo} not found or not accessible`);
       }
       throw new Error(`Failed to fetch repository: ${error.message}`);
+    }
+  }
+
+  async fetchUserData(username: string) {
+    try {
+      const { data: user } = await this.client.users.getByUsername({
+        username,
+      });
+      return user;
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(`User ${username} not found or not accessible`);
+      }
+      throw new Error(`Failed to fetch user: ${error.message}`);
+    }
+  }
+
+  async fetchUserRepositories(username: string, maxRepos: number = 10): Promise<any[]> {
+    try {
+      const repos: any[] = [];
+      let page = 1;
+      const perPage = 30;
+
+      while (repos.length < maxRepos) {
+        const { data: repoPage } = await this.client.repos.listForUser({
+          username,
+          type: 'owner',
+          sort: 'updated',
+          per_page: perPage,
+          page,
+        });
+
+        if (repoPage.length === 0) break;
+
+        repos.push(...repoPage.slice(0, maxRepos - repos.length));
+        page++;
+
+        if (repoPage.length < perPage) break;
+      }
+
+      // Filter out forks to focus on original repositories for meaningful analysis
+      const originalRepos = repos.filter(repo => !repo.fork);
+      console.log(`Fetched ${originalRepos.length} original repositories for user ${username}`);
+      
+      return originalRepos.slice(0, Math.min(maxRepos, originalRepos.length));
+    } catch (error: any) {
+      throw new Error(`Failed to fetch user repositories: ${error.message}`);
     }
   }
 
@@ -402,6 +463,118 @@ export class GitHubAnalyzer {
       bugFixes: Math.round((categories.bugFixes / total) * 100),
       maintenance: Math.round((categories.maintenance / total) * 100),
       documentation: Math.round((categories.documentation / total) * 100),
+    };
+  }
+
+  async analyzeUser(username: string) {
+    console.log(`Starting user analysis for: ${username}`);
+    
+    // Fetch user data
+    const userData = await this.fetchUserData(username);
+    
+    // Fetch user's repositories (limit to 10 for performance)
+    const repositories = await this.fetchUserRepositories(username, 10);
+    
+    if (repositories.length === 0) {
+      throw new Error(`No public repositories found for user ${username}`);
+    }
+    
+    console.log(`Analyzing ${repositories.length} repositories for user ${username}`);
+    
+    // Aggregate data across all repositories
+    let allCommits: CommitData[] = [];
+    const repositoryNames: string[] = [];
+    
+    // Fetch commits from each repository (reduced limit per repo for performance)
+    const maxCommitsPerRepo = 25; // Further reduced to avoid rate limits
+    const since = new Date();
+    since.setDate(since.getDate() - 90); // Last 90 days
+    
+    for (const repo of repositories) {
+      try {
+        console.log(`Fetching commits for ${repo.name}...`);
+        const repoCommits = await this.fetchCommits(username, repo.name, since);
+        allCommits = allCommits.concat(repoCommits.slice(0, maxCommitsPerRepo));
+        repositoryNames.push(repo.name);
+      } catch (error) {
+        console.warn(`Could not fetch commits for ${repo.name}:`, error);
+        // Continue with other repositories
+      }
+    }
+    
+    if (allCommits.length === 0) {
+      throw new Error(`No commits found in the last 90 days for user ${username}`);
+    }
+    
+    console.log(`Analyzing ${allCommits.length} total commits across ${repositoryNames.length} repositories`);
+    
+    // Calculate aggregated metrics
+    const doraMetrics = this.calculateDoraMetrics(allCommits);
+    const healthMetrics = this.calculateUserHealthMetrics(allCommits, repositories, userData);
+    const contributors = this.calculateContributors(allCommits);
+    const timeline = this.calculateTimeline(allCommits);
+    const workClassification = this.calculateWorkClassification(allCommits);
+    
+    return {
+      userData,
+      repositories: repositoryNames,
+      totalRepositories: repositories.length,
+      doraMetrics,
+      healthMetrics,
+      contributors,
+      timeline,
+      workClassification,
+      totalCommits: allCommits.length,
+    };
+  }
+
+  calculateUserHealthMetrics(commits: CommitData[], repositories: any[], userData: any): HealthMetrics {
+    const totalCommits = commits.length;
+    const filesChanged = commits.reduce((sum, commit) => sum + commit.changedFiles, 0);
+    const contributors = new Set(commits.map(commit => commit.author)).size;
+    
+    // Calculate code velocity across all repositories
+    const totalLines = commits.reduce((sum, commit) => sum + commit.additions + commit.deletions, 0);
+    const daysSinceFirstCommit = commits.length > 0 ? 
+      Math.max(1, (Date.now() - new Date(commits[0].date).getTime()) / (1000 * 60 * 60 * 24)) : 1;
+    const linesPerDay = Math.round(totalLines / daysSinceFirstCommit);
+    
+    // Calculate innovation ratio (non-fix commits)
+    const fixKeywords = ['fix', 'bug', 'error', 'revert', 'hotfix'];
+    const innovationCommits = commits.filter(commit => 
+      !fixKeywords.some(keyword => commit.message.toLowerCase().includes(keyword))
+    );
+    const innovationRatio = Math.round((innovationCommits.length / Math.max(1, totalCommits)) * 100);
+    
+    // Calculate technical debt (large commits)
+    const largeCommits = commits.filter(commit => commit.additions + commit.deletions > 500);
+    const technicalDebt = Math.round((largeCommits.length / Math.max(1, totalCommits)) * 100);
+    
+    // Calculate overall score for user (different from single repository)
+    const repositoryScore = Math.min(100, repositories.length * 10); // 10 points per repository (max 10 repos)
+    const activityScore = Math.min(100, totalCommits / 10 * 5); // 5 points per 10 commits
+    const diversityScore = Math.min(100, contributors * 20); // 20 points per unique contributor
+    const qualityScore = Math.max(0, 100 - technicalDebt); // Reduce score for high debt
+    
+    const overallScore = Math.round((repositoryScore + activityScore + diversityScore + qualityScore) / 4);
+    
+    const status = overallScore >= 90 ? 'excellent' :
+                  overallScore >= 70 ? 'good' :
+                  overallScore >= 50 ? 'fair' : 'poor';
+    
+    const lastActivity = commits.length > 0 ? 
+      this.formatTimeAgo(new Date(commits[commits.length - 1].date)) : 'No activity';
+
+    return {
+      overallScore,
+      status,
+      totalCommits,
+      filesChanged,
+      activeContributors: contributors,
+      codeVelocity: `${linesPerDay} lines/day`,
+      innovationRatio,
+      technicalDebt,
+      lastActivity,
     };
   }
 

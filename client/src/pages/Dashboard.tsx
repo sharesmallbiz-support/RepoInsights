@@ -22,7 +22,7 @@ interface AnalysisState {
   isAnalyzing: boolean;
   hasResults: boolean;
   repositoryUrl: string;
-  analysisType: 'repository' | null;
+  analysisType: 'repository' | 'user' | null;
   data: AnalysisResponse | null;
   error: string | null;
 }
@@ -40,7 +40,7 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const analysisMutation = useMutation({
-    mutationFn: async ({ url, type }: { url: string; type: 'repository' }) => {
+    mutationFn: async ({ url, type }: { url: string; type: 'repository' | 'user' }) => {
       const response = await apiRequest('POST', '/api/analyze', { url, type });
       return response.json() as Promise<AnalysisResponse>;
     },
@@ -72,7 +72,7 @@ export default function Dashboard() {
     },
   });
 
-  const handleAnalyze = async (url: string, type: 'repository') => {
+  const handleAnalyze = async (url: string, type: 'repository' | 'user') => {
     setAnalysis({
       isAnalyzing: true,
       hasResults: false,
@@ -120,7 +120,7 @@ export default function Dashboard() {
                     {analysis.repositoryUrl}
                   </Badge>
                   <Badge className="bg-success text-success-foreground">
-                    {analysis.analysisType}
+                    {analysis.analysisType === 'repository' ? 'Repository' : 'User'}
                   </Badge>
                 </div>
               )}
