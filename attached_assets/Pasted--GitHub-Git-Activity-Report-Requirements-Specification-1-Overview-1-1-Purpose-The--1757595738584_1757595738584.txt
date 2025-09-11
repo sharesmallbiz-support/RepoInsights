@@ -1,0 +1,284 @@
+# GitHub Git Activity Report - Requirements Specification
+
+## 1. Overview
+
+### 1.1 Purpose
+The GitHub Git Activity Report is a comprehensive analytics tool designed to analyze public GitHub repositories and provide insights into development patterns, team productivity, and software delivery performance using industry-standard metrics and GitHub best practices.
+
+### 1.2 Scope
+This tool analyzes Git commit history, repository structure, and development patterns to generate actionable insights for development teams, project managers, and open-source maintainers working with public GitHub repositories.
+
+### 1.3 Target Audience
+- **Development Teams**: Track productivity and code quality metrics
+- **Project Managers**: Monitor project health and team velocity
+- **Open Source Maintainers**: Understand contributor patterns and project activity
+- **Engineering Leaders**: Make data-driven decisions about development processes
+- **DevOps Teams**: Implement and track DORA metrics for continuous improvement
+
+## 2. Functional Requirements
+
+### 2.1 Repository Analysis
+
+#### 2.1.1 Repository Information
+- **REQ-2.1.1**: Extract basic repository metadata including name, description, primary language, creation date, and default branch
+- **REQ-2.1.2**: Identify repository type (public/private, fork status, archived status)
+- **REQ-2.1.3**: Calculate repository age and active development period
+- **REQ-2.1.4**: Display GitHub repository statistics (stars, forks, watchers, issues, pull requests)
+
+#### 2.1.2 Commit History Analysis
+- **REQ-2.1.2a**: Analyze commit history for configurable time periods (default: 30 days, max: unlimited)
+- **REQ-2.1.2b**: Extract commit metadata: hash, author, date, message, files changed, lines added/deleted
+- **REQ-2.1.2c**: Support analysis across all branches or specific branch selection
+- **REQ-2.1.2d**: Handle large repositories with efficient memory management
+
+### 2.2 DORA Metrics Implementation
+
+#### 2.2.1 Deployment Frequency
+- **REQ-2.2.1a**: Calculate daily commit frequency as proxy for deployment frequency
+- **REQ-2.2.1b**: Identify release patterns through tag analysis
+- **REQ-2.2.1c**: Categorize frequency as Elite (>1/day), High (1/day-1/week), Medium (1/week-1/month), Low (<1/month)
+- **REQ-2.2.1d**: Provide trend analysis over time periods
+
+#### 2.2.2 Lead Time for Changes
+- **REQ-2.2.2a**: Calculate average time between commits
+- **REQ-2.2.2b**: Measure time from first commit to merge for feature branches
+- **REQ-2.2.2c**: Categorize as Elite (<1 hour), High (1 day), Medium (1 week), Low (>1 month)
+- **REQ-2.2.2d**: Track lead time trends and variations
+
+#### 2.2.3 Change Failure Rate
+- **REQ-2.2.3a**: Analyze commit messages for failure indicators (fix, bug, error, revert)
+- **REQ-2.2.3b**: Calculate percentage of commits that are failure-related
+- **REQ-2.2.3c**: Categorize as Elite (<15%), High (<20%), Medium (<30%), Low (>30%)
+- **REQ-2.2.3d**: Identify patterns in failure types and timing
+
+#### 2.2.4 Recovery Time
+- **REQ-2.2.4a**: Measure time between failure detection and resolution
+- **REQ-2.2.4b**: Track revert-to-fix cycles
+- **REQ-2.2.4c**: Categorize as Elite (<1 hour), High (<1 day), Medium (<1 week), Low (>1 week)
+
+### 2.3 Developer Velocity Metrics
+
+#### 2.3.1 Productivity Metrics
+- **REQ-2.3.1a**: Calculate commits per day, week, and month
+- **REQ-2.3.1b**: Measure lines of code changed per time period
+- **REQ-2.3.1c**: Track average commit size and classify as Very Small (<50), Small (50-200), Medium (200-500), Large (500-1000), Very Large (>1000)
+- **REQ-2.3.1d**: Analyze code churn rates and patterns
+
+#### 2.3.2 Consistency Metrics
+- **REQ-2.3.2a**: Measure commit frequency consistency
+- **REQ-2.3.2b**: Identify development streaks and gaps
+- **REQ-2.3.2c**: Calculate coefficient of variation for commit patterns
+- **REQ-2.3.2d**: Track active development days vs. total days
+
+### 2.4 Work Classification
+
+#### 2.4.1 Commit Type Analysis
+- **REQ-2.4.1a**: Classify commits as Innovation, Bug Fixes, Maintenance, Documentation
+- **REQ-2.4.1b**: Use commit message analysis and file patterns for classification
+- **REQ-2.4.1c**: Calculate work distribution percentages
+- **REQ-2.4.1d**: Identify work balance patterns (Innovation-Heavy, Bug-Heavy, Balanced)
+
+#### 2.4.2 Technical Debt Tracking
+- **REQ-2.4.2a**: Identify large commits as potential technical debt indicators
+- **REQ-2.4.2b**: Calculate technical debt ratio (large commits / total commits)
+- **REQ-2.4.2c**: Track debt accumulation over time
+- **REQ-2.4.2d**: Categorize debt levels as Low (<20%), Medium (20-40%), High (>40%)
+
+### 2.5 Contributor Analysis
+
+#### 2.5.1 Author Metrics
+- **REQ-2.5.1a**: Track individual contributor statistics (commits, lines changed, files modified)
+- **REQ-2.5.1b**: Calculate contributor distribution and identify top contributors
+- **REQ-2.5.1c**: Analyze contributor activity patterns and consistency
+- **REQ-2.5.1d**: Track new vs. returning contributors
+
+#### 2.5.2 Collaboration Patterns
+- **REQ-2.5.2a**: Identify collaboration indicators through file overlap analysis
+- **REQ-2.5.2b**: Track contributor onboarding and ramp-up patterns
+- **REQ-2.5.2c**: Measure contributor diversity and distribution
+- **REQ-2.5.2d**: Analyze contributor retention patterns
+
+### 2.6 Timeline and Pattern Analysis
+
+#### 2.6.1 Daily Timeline Visualization
+- **REQ-2.6.1a**: Generate daily commit timeline with activity levels
+- **REQ-2.6.1b**: Classify daily activity as Very High (10+), High (5+), Medium (2+), Low (1), None (0)
+- **REQ-2.6.1c**: Visualize commit size categories per day
+- **REQ-2.6.1d**: Provide configurable timeline periods (last 20 days default)
+
+#### 2.6.2 Activity Pattern Recognition
+- **REQ-2.6.2a**: Identify most active days of week and hours of day
+- **REQ-2.6.2b**: Distinguish between business hours and off-hours activity
+- **REQ-2.6.2c**: Track weekend vs. workday development patterns
+- **REQ-2.6.2d**: Identify development streaks and inactive periods
+
+### 2.7 Repository Health Assessment
+
+#### 2.7.1 Overall Health Score
+- **REQ-2.7.1a**: Calculate composite health score based on multiple metrics
+- **REQ-2.7.1b**: Weight different factors (DORA metrics, consistency, debt levels)
+- **REQ-2.7.1c**: Categorize health as Excellent (90+), Good (70+), Fair (50+), Poor (<50)
+- **REQ-2.7.1d**: Provide health trend analysis over time
+
+#### 2.7.2 Risk Assessment
+- **REQ-2.7.2a**: Identify risk factors (large commits, long gaps, high failure rates)
+- **REQ-2.7.2b**: Flag repositories with concerning patterns
+- **REQ-2.7.2c**: Provide early warning indicators for project health issues
+- **REQ-2.7.2d**: Track risk factor trends and improvements
+
+## 3. Reporting Requirements
+
+### 3.1 Console Output
+- **REQ-3.1.1**: Provide comprehensive text-based report with color coding and formatting
+- **REQ-3.1.2**: Display hierarchical information structure with clear sections
+- **REQ-3.1.3**: Include progress indicators during analysis
+- **REQ-3.1.4**: Show summary metrics and detailed breakdowns
+
+### 3.2 HTML Report Generation
+- **REQ-3.2.1**: Generate interactive HTML reports with modern styling
+- **REQ-3.2.2**: Include responsive design for mobile and desktop viewing
+- **REQ-3.2.3**: Embed interactive charts using Chart.js or similar library
+- **REQ-3.2.4**: Provide print-friendly formatting options
+
+### 3.3 Chart Visualizations
+- **REQ-3.3.1**: Create daily commit timeline chart with dual-axis (commits and average size)
+- **REQ-3.3.2**: Generate DORA metrics dashboard with trend indicators
+- **REQ-3.3.3**: Display contributor activity heatmaps
+- **REQ-3.3.4**: Show work distribution pie charts and bar graphs
+
+### 3.4 Data Export Options
+- **REQ-3.4.1**: Export raw data in JSON format for further analysis
+- **REQ-3.4.2**: Provide CSV export for spreadsheet integration
+- **REQ-3.4.3**: Support XML export for enterprise integration
+- **REQ-3.4.4**: Include metadata about analysis parameters and timestamps
+
+## 4. Integration Requirements
+
+### 4.1 GitHub Integration
+- **REQ-4.1.1**: Support GitHub personal access tokens for rate limit increases
+- **REQ-4.1.2**: Handle GitHub API rate limiting gracefully with retry logic
+- **REQ-4.1.3**: Support GitHub Enterprise Server instances
+- **REQ-4.1.4**: Integrate with GitHub Actions for automated reporting
+
+### 4.2 Command Line Interface
+- **REQ-4.2.1**: Provide comprehensive CLI with parameter validation
+- **REQ-4.2.2**: Support configuration files for common parameters
+- **REQ-4.2.3**: Include help documentation and usage examples
+- **REQ-4.2.4**: Support batch processing of multiple repositories
+
+### 4.3 CI/CD Integration
+- **REQ-4.3.1**: Generate reports suitable for CI/CD pipeline integration
+- **REQ-4.3.2**: Provide exit codes for automated decision making
+- **REQ-4.3.3**: Support artifact generation for build systems
+- **REQ-4.3.4**: Include webhook support for automated triggers
+
+## 5. Performance Requirements
+
+### 5.1 Scalability
+- **REQ-5.1.1**: Handle repositories with 100,000+ commits efficiently
+- **REQ-5.1.2**: Process analysis within 5 minutes for typical repositories (<10,000 commits)
+- **REQ-5.1.3**: Implement memory-efficient streaming for large datasets
+- **REQ-5.1.4**: Support parallel processing for multi-repository analysis
+
+### 5.2 Resource Management
+- **REQ-5.2.1**: Limit memory usage to <2GB for typical analysis
+- **REQ-5.2.2**: Provide configurable resource limits
+- **REQ-5.2.3**: Implement graceful degradation for resource constraints
+- **REQ-5.2.4**: Support incremental analysis for large repositories
+
+## 6. Security Requirements
+
+### 6.1 Data Privacy
+- **REQ-6.1.1**: Only analyze publicly available repository data
+- **REQ-6.1.2**: Implement secure token handling for GitHub API access
+- **REQ-6.1.3**: Provide options for anonymizing contributor information
+- **REQ-6.1.4**: Include data retention and cleanup policies
+
+### 6.2 Access Control
+- **REQ-6.2.1**: Respect repository access permissions
+- **REQ-6.2.2**: Handle authentication failures gracefully
+- **REQ-6.2.3**: Support organization-level access controls
+- **REQ-6.2.4**: Implement audit logging for enterprise use
+
+## 7. Quality Requirements
+
+### 7.1 Reliability
+- **REQ-7.1.1**: Handle network failures and API timeouts gracefully
+- **REQ-7.1.2**: Validate all input data and parameters
+- **REQ-7.1.3**: Provide clear error messages and recovery guidance
+- **REQ-7.1.4**: Include comprehensive logging for troubleshooting
+
+### 7.2 Usability
+- **REQ-7.2.1**: Provide intuitive command-line interface with sensible defaults
+- **REQ-7.2.2**: Include comprehensive documentation and examples
+- **REQ-7.2.3**: Support both novice and expert user workflows
+- **REQ-7.2.4**: Provide helpful progress indicators and status updates
+
+### 7.3 Maintainability
+- **REQ-7.3.1**: Implement modular architecture for easy extension
+- **REQ-7.3.2**: Provide comprehensive unit test coverage (>90%)
+- **REQ-7.3.3**: Include integration tests for GitHub API interactions
+- **REQ-7.3.4**: Support plugin architecture for custom metrics
+
+## 8. Configuration Requirements
+
+### 8.1 Analysis Parameters
+- **REQ-8.1.1**: Configurable analysis time periods (days, weeks, months, all-time)
+- **REQ-8.1.2**: Selectable branches for analysis (default, specific, all)
+- **REQ-8.1.3**: Customizable metric thresholds and categories
+- **REQ-8.1.4**: Optional exclusion patterns for files and commits
+
+### 8.2 Output Customization
+- **REQ-8.2.1**: Configurable report sections and detail levels
+- **REQ-8.2.2**: Customizable chart themes and colors
+- **REQ-8.2.3**: Flexible output formatting options
+- **REQ-8.2.4**: Template system for organizational branding
+
+## 9. Best Practices Integration
+
+### 9.1 GitHub Best Practices
+- **REQ-9.1.1**: Align metrics with GitHub Flow and collaborative development
+- **REQ-9.1.2**: Integrate with GitHub's community standards and health metrics
+- **REQ-9.1.3**: Support GitHub-specific features (Issues, Pull Requests, Discussions)
+- **REQ-9.1.4**: Provide recommendations based on GitHub's development best practices
+
+### 9.2 Industry Standards
+- **REQ-9.2.1**: Implement DORA metrics according to official specifications
+- **REQ-9.2.2**: Follow SPACE framework principles for developer productivity
+- **REQ-9.2.3**: Align with Accelerate book recommendations
+- **REQ-9.2.4**: Support DevOps maturity assessment frameworks
+
+## 10. Documentation Requirements
+
+### 10.1 User Documentation
+- **REQ-10.1.1**: Comprehensive README with quick start guide
+- **REQ-10.1.2**: Detailed usage examples and common scenarios
+- **REQ-10.1.3**: Troubleshooting guide and FAQ section
+- **REQ-10.1.4**: Metric definitions and interpretation guide
+
+### 10.2 Technical Documentation
+- **REQ-10.2.1**: API documentation for programmatic access
+- **REQ-10.2.2**: Architecture overview and component diagrams
+- **REQ-10.2.3**: Extension and customization guide
+- **REQ-10.2.4**: Performance tuning recommendations
+
+## 11. Future Considerations
+
+### 11.1 Enhanced Analytics
+- **REQ-11.1.1**: Machine learning-based pattern recognition
+- **REQ-11.1.2**: Predictive analytics for project health
+- **REQ-11.1.3**: Anomaly detection for unusual patterns
+- **REQ-11.1.4**: Integration with external code quality tools
+
+### 11.2 Collaboration Features
+- **REQ-11.2.1**: Team dashboard with comparative metrics
+- **REQ-11.2.2**: Benchmark comparison against similar repositories
+- **REQ-11.2.3**: Goal setting and progress tracking
+- **REQ-11.2.4**: Integration with project management tools
+
+---
+
+**Document Version**: 1.0  
+**Last Updated**: September 11, 2025  
+**Status**: Draft for Review  
+**Next Review Date**: October 11, 2025
