@@ -3,19 +3,35 @@ import { Download, FileText, Code, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { type AnalysisResponse } from '@shared/schema';
 
 interface ExportOptionsProps {
-  analysisData?: any;
+  analysisData?: AnalysisResponse | null;
   repositoryUrl?: string;
 }
 
 export default function ExportOptions({ analysisData, repositoryUrl }: ExportOptionsProps) {
   const [exportingType, setExportingType] = useState<string | null>(null);
 
-  // todo: remove mock data when integrating with real API
-  const mockData = {
-    repository: repositoryUrl || 'https://github.com/example/repo',
-    analysis: analysisData || { dora: {}, contributors: [], health: {} },
+  if (!analysisData) {
+    return (
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Download className="h-6 w-6 text-primary" />
+          <h3 className="text-xl font-semibold">Export Analysis</h3>
+        </div>
+        <div className="text-center py-8 text-muted-foreground">
+          <p>No analysis data available for export. Please run an analysis first.</p>
+        </div>
+      </Card>
+    );
+  }
+
+  const exportData = {
+    repository: repositoryUrl || analysisData.repositoryUrl,
+    repositoryName: analysisData.repositoryName,
+    repositoryOwner: analysisData.repositoryOwner,
+    analysis: analysisData,
     timestamp: new Date().toISOString(),
   };
 
@@ -28,9 +44,9 @@ export default function ExportOptions({ analysisData, repositoryUrl }: ExportOpt
     
     try {
       if (type === 'json') {
-        const dataStr = JSON.stringify(mockData, null, 2);
+        const dataStr = JSON.stringify(exportData, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        const exportFileDefaultName = 'github-analysis.json';
+        const exportFileDefaultName = `${analysisData.repositoryName}-analysis.json`;
         
         const linkElement = document.createElement('a');
         linkElement.setAttribute('href', dataUri);
@@ -42,17 +58,32 @@ export default function ExportOptions({ analysisData, repositoryUrl }: ExportOpt
         <!DOCTYPE html>
         <html>
         <head>
-          <title>GitHub Analysis Report</title>
+          <title>GitHub Analysis Report - ${analysisData.repositoryName}</title>
           <style>
-            body { font-family: system-ui; margin: 40px; }
+            body { font-family: system-ui; margin: 40px; line-height: 1.6; }
             .metric { padding: 20px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+            .score { font-size: 24px; font-weight: bold; color: #0066cc; }
           </style>
         </head>
         <body>
-          <h1>GitHub Repository Analysis</h1>
+          <h1>GitHub Repository Analysis Report</h1>
           <div class="metric">
-            <h2>Repository: ${mockData.repository}</h2>
-            <p>Generated: ${new Date().toLocaleString()}</p>
+            <h2>Repository: ${analysisData.repositoryName}</h2>
+            <p><strong>Owner:</strong> ${analysisData.repositoryOwner}</p>
+            <p><strong>URL:</strong> ${analysisData.repositoryUrl}</p>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          <div class="metric">
+            <h3>DORA Metrics</h3>
+            <p><strong>Overall Score:</strong> <span class="score">${analysisData.doraMetrics.overallScore}/100</span></p>
+            <p><strong>Rating:</strong> ${analysisData.doraMetrics.overallRating}</p>
+          </div>
+          <div class="metric">
+            <h3>Repository Health</h3>
+            <p><strong>Health Score:</strong> <span class="score">${analysisData.healthMetrics.overallScore}/100</span></p>
+            <p><strong>Status:</strong> ${analysisData.healthMetrics.status}</p>
+            <p><strong>Total Commits:</strong> ${analysisData.healthMetrics.totalCommits}</p>
+            <p><strong>Active Contributors:</strong> ${analysisData.healthMetrics.activeContributors}</p>
           </div>
         </body>
         </html>
@@ -62,16 +93,16 @@ export default function ExportOptions({ analysisData, repositoryUrl }: ExportOpt
         const url = URL.createObjectURL(blob);
         const linkElement = document.createElement('a');
         linkElement.href = url;
-        linkElement.download = 'github-analysis.html';
+        linkElement.download = `${analysisData.repositoryName}-analysis.html`;
         linkElement.click();
         URL.revokeObjectURL(url);
       } else if (type === 'csv') {
-        const csvContent = `Repository,Analysis Date,DORA Score,Contributors\n${mockData.repository},${new Date().toLocaleDateString()},85,8`;
+        const csvContent = `Repository,Owner,Analysis Date,DORA Score,Health Score,Contributors,Total Commits\n${analysisData.repositoryName},${analysisData.repositoryOwner},${new Date().toLocaleDateString()},${analysisData.doraMetrics.overallScore},${analysisData.healthMetrics.overallScore},${analysisData.healthMetrics.activeContributors},${analysisData.healthMetrics.totalCommits}`;
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const linkElement = document.createElement('a');
         linkElement.href = url;
-        linkElement.download = 'github-analysis.csv';
+        linkElement.download = `${analysisData.repositoryName}-analysis.csv`;
         linkElement.click();
         URL.revokeObjectURL(url);
       }

@@ -2,31 +2,28 @@ import { Users, GitCommit, FileText, Award } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-
-interface Contributor {
-  name: string;
-  commits: number;
-  linesAdded: number;
-  linesDeleted: number;
-  filesChanged: number;
-  rank: number;
-}
+import { type Contributor } from '@shared/schema';
 
 interface ContributorStatsProps {
   contributors?: Contributor[];
 }
 
 export default function ContributorStats({ contributors }: ContributorStatsProps) {
-  // todo: remove mock data when integrating with real API
-  const mockContributors: Contributor[] = [
-    { name: 'Sarah Chen', commits: 142, linesAdded: 8420, linesDeleted: 2130, filesChanged: 89, rank: 1 },
-    { name: 'Alex Rodriguez', commits: 89, linesAdded: 5230, linesDeleted: 1890, filesChanged: 67, rank: 2 },
-    { name: 'Jamie Kim', commits: 76, linesAdded: 4180, linesDeleted: 1200, filesChanged: 54, rank: 3 },
-    { name: 'Morgan Taylor', commits: 58, linesAdded: 3240, linesDeleted: 980, filesChanged: 42, rank: 4 },
-    { name: 'River Johnson', commits: 43, linesAdded: 2150, linesDeleted: 760, filesChanged: 31, rank: 5 },
-  ];
+  if (!contributors || contributors.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Users className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">Top Contributors</h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No contributor data available. Please run an analysis first.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const data = contributors || mockContributors;
+  const data = contributors;
 
   const getRankBadge = (rank: number) => {
     if (rank === 1) return { label: 'Top Contributor', type: 'excellent' as const };

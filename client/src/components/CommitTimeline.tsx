@@ -1,13 +1,7 @@
 import { Calendar, GitCommit, TrendingUp } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-interface TimelineDay {
-  date: string;
-  commits: number;
-  linesChanged: number;
-  activity: 'very-high' | 'high' | 'medium' | 'low' | 'none';
-}
+import { type TimelineDay } from '@shared/schema';
 
 interface CommitTimelineProps {
   timeline?: TimelineDay[];
@@ -15,26 +9,21 @@ interface CommitTimelineProps {
 }
 
 export default function CommitTimeline({ timeline, period = 'Last 20 Days' }: CommitTimelineProps) {
-  // todo: remove mock data when integrating with real API
-  const mockTimeline: TimelineDay[] = [
-    { date: 'Dec 20', commits: 8, linesChanged: 1240, activity: 'very-high' },
-    { date: 'Dec 19', commits: 5, linesChanged: 680, activity: 'high' },
-    { date: 'Dec 18', commits: 3, linesChanged: 420, activity: 'medium' },
-    { date: 'Dec 17', commits: 1, linesChanged: 125, activity: 'low' },
-    { date: 'Dec 16', commits: 0, linesChanged: 0, activity: 'none' },
-    { date: 'Dec 15', commits: 7, linesChanged: 890, activity: 'high' },
-    { date: 'Dec 14', commits: 4, linesChanged: 560, activity: 'medium' },
-    { date: 'Dec 13', commits: 9, linesChanged: 1420, activity: 'very-high' },
-    { date: 'Dec 12', commits: 2, linesChanged: 280, activity: 'low' },
-    { date: 'Dec 11', commits: 6, linesChanged: 780, activity: 'high' },
-    { date: 'Dec 10', commits: 1, linesChanged: 95, activity: 'low' },
-    { date: 'Dec 9', commits: 5, linesChanged: 640, activity: 'high' },
-    { date: 'Dec 8', commits: 0, linesChanged: 0, activity: 'none' },
-    { date: 'Dec 7', commits: 3, linesChanged: 380, activity: 'medium' },
-    { date: 'Dec 6', commits: 8, linesChanged: 1120, activity: 'very-high' },
-  ];
+  if (!timeline || timeline.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Calendar className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">Commit Timeline</h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No timeline data available. Please run an analysis first.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const data = timeline || mockTimeline;
+  const data = timeline;
 
   const getActivityColor = (activity: string) => {
     switch (activity) {

@@ -1,27 +1,27 @@
 import { Target, Clock, AlertTriangle, Zap } from 'lucide-react';
 import MetricCard from './MetricCard';
+import { type DoraMetrics } from '@shared/schema';
 
 interface DORAMetricsProps {
-  metrics?: {
-    deploymentFrequency: { value: string; rating: string };
-    leadTime: { value: string; rating: string };
-    changeFailureRate: { value: string; rating: string };
-    recoveryTime: { value: string; rating: string };
-    doraScore: { value: number; rating: string };
-  };
+  metrics?: DoraMetrics;
 }
 
 export default function DORAMetrics({ metrics }: DORAMetricsProps) {
-  // todo: remove mock data when integrating with real API
-  const mockMetrics = {
-    deploymentFrequency: { value: '2.3 commits/day', rating: 'high' },
-    leadTime: { value: '4.2 hours', rating: 'elite' },
-    changeFailureRate: { value: '12.5%', rating: 'good' },
-    recoveryTime: { value: '45 minutes', rating: 'elite' },
-    doraScore: { value: 85, rating: 'high' },
-  };
+  if (!metrics) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Target className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">DORA Metrics</h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No metrics data available. Please run an analysis first.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const data = metrics || mockMetrics;
+  const data = metrics;
 
   return (
     <div className="space-y-6">
@@ -33,13 +33,13 @@ export default function DORAMetrics({ metrics }: DORAMetricsProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <MetricCard
           title="DORA Score"
-          value={`${data.doraScore.value}/100`}
+          value={`${data.overallScore}/100`}
           rating={{
-            label: data.doraScore.rating,
-            type: data.doraScore.rating.toLowerCase() as any,
+            label: data.overallRating,
+            type: data.overallRating.toLowerCase() as any,
           }}
           icon={<Target className="h-5 w-5" />}
-          trend={{ direction: 'up', value: '+12% from last month' }}
+          trend={{ direction: 'up', value: `Score: ${data.overallScore}` }}
         />
         
         <MetricCard
@@ -62,7 +62,7 @@ export default function DORAMetrics({ metrics }: DORAMetricsProps) {
             type: data.leadTime.rating.toLowerCase() as any,
           }}
           icon={<Clock className="h-5 w-5" />}
-          trend={{ direction: 'down', value: '-30 min improvement' }}
+          trend={{ direction: 'up', value: `Score: ${data.leadTime.score}` }}
         />
         
         <MetricCard
@@ -85,7 +85,7 @@ export default function DORAMetrics({ metrics }: DORAMetricsProps) {
             type: data.recoveryTime.rating.toLowerCase() as any,
           }}
           icon={<Clock className="h-5 w-5" />}
-          trend={{ direction: 'up', value: '+5% faster recovery' }}
+          trend={{ direction: 'up', value: `Score: ${data.recoveryTime.score}` }}
         />
       </div>
     </div>

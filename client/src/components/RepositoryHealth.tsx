@@ -2,38 +2,28 @@ import { Heart, AlertCircle, CheckCircle, TrendingUp, GitBranch } from 'lucide-r
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-
-interface HealthMetrics {
-  overallScore: number;
-  status: 'excellent' | 'good' | 'fair' | 'poor';
-  totalCommits: number;
-  filesChanged: number;
-  activeContributors: number;
-  codeVelocity: string;
-  innovationRatio: number;
-  technicalDebt: number;
-  lastActivity: string;
-}
+import { type HealthMetrics } from '@shared/schema';
 
 interface RepositoryHealthProps {
   metrics?: HealthMetrics;
 }
 
 export default function RepositoryHealth({ metrics }: RepositoryHealthProps) {
-  // todo: remove mock data when integrating with real API
-  const mockMetrics: HealthMetrics = {
-    overallScore: 82,
-    status: 'good',
-    totalCommits: 1247,
-    filesChanged: 892,
-    activeContributors: 8,
-    codeVelocity: '156 lines/day',
-    innovationRatio: 68,
-    technicalDebt: 23,
-    lastActivity: '2 hours ago',
-  };
+  if (!metrics) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Heart className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">Repository Health</h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No health data available. Please run an analysis first.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const data = metrics || mockMetrics;
+  const data = metrics;
 
   const getStatusColor = (status: string) => {
     switch (status) {

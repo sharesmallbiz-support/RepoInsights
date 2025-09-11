@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Github, BarChart3, Users, Heart, GitBranch, PieChart, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
 
 import ThemeToggle from '@/components/ThemeToggle';
 import GitHubURLInput from '@/components/GitHubURLInput';
@@ -13,12 +15,16 @@ import ContributorStats from '@/components/ContributorStats';
 import CommitTimeline from '@/components/CommitTimeline';
 import WorkClassification from '@/components/WorkClassification';
 import ExportOptions from '@/components/ExportOptions';
+import { apiRequest } from '@/lib/queryClient';
+import type { AnalysisResponse } from '@shared/schema';
 
 interface AnalysisState {
   isAnalyzing: boolean;
   hasResults: boolean;
   repositoryUrl: string;
   analysisType: 'repository' | null;
+  data: AnalysisResponse | null;
+  error: string | null;
 }
 
 export default function Dashboard() {
@@ -27,6 +33,43 @@ export default function Dashboard() {
     hasResults: false,
     repositoryUrl: '',
     analysisType: null,
+    data: null,
+    error: null,
+  });
+
+  const { toast } = useToast();
+
+  const analysisMutation = useMutation({
+    mutationFn: async ({ url, type }: { url: string; type: 'repository' }) => {
+      const response = await apiRequest('POST', '/api/analyze', { url, type });
+      return response.json() as Promise<AnalysisResponse>;
+    },
+    onSuccess: (data) => {
+      setAnalysis(prev => ({
+        ...prev,
+        isAnalyzing: false,
+        hasResults: true,
+        data,
+        error: null,
+      }));
+      toast({
+        title: "Analysis Complete",
+        description: `Successfully analyzed ${data.repositoryName}`,
+      });
+    },
+    onError: (error: Error) => {
+      setAnalysis(prev => ({
+        ...prev,
+        isAnalyzing: false,
+        hasResults: false,
+        error: error.message,
+      }));
+      toast({
+        title: "Analysis Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const handleAnalyze = async (url: string, type: 'repository') => {
@@ -35,21 +78,12 @@ export default function Dashboard() {
       hasResults: false,
       repositoryUrl: url,
       analysisType: type,
+      data: null,
+      error: null,
     });
 
     console.log('Starting analysis for:', url, 'Type:', type);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    setAnalysis({
-      isAnalyzing: false,
-      hasResults: true,
-      repositoryUrl: url,
-      analysisType: type,
-    });
-
-    console.log('Analysis completed for:', url);
+    analysisMutation.mutate({ url, type });
   };
 
   const resetAnalysis = () => {
@@ -58,6 +92,8 @@ export default function Dashboard() {
       hasResults: false,
       repositoryUrl: '',
       analysisType: null,
+      data: null,
+      error: null,
     });
   };
 
@@ -189,31 +225,34 @@ export default function Dashboard() {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-8 mt-8">
-                <DORAMetrics />
+                <DORAMetrics metrics={analysis.data?.doraMetrics} />
                 <Separator />
-                <RepositoryHealth />
+                <RepositoryHealth metrics={analysis.data?.healthMetrics} />
               </TabsContent>
 
               <TabsContent value="dora" className="mt-8">
-                <DORAMetrics />
+                <DORAMetrics metrics={analysis.data?.doraMetrics} />
               </TabsContent>
 
               <TabsContent value="health" className="mt-8">
-                <RepositoryHealth />
+                <RepositoryHealth metrics={analysis.data?.healthMetrics} />
               </TabsContent>
 
               <TabsContent value="contributors" className="mt-8">
-                <ContributorStats />
+                <ContributorStats contributors={analysis.data?.contributors} />
               </TabsContent>
 
               <TabsContent value="timeline" className="mt-8">
-                <CommitTimeline />
+                <CommitTimeline timeline={analysis.data?.timeline} />
               </TabsContent>
 
               <TabsContent value="classification" className="space-y-8 mt-8">
-                <WorkClassification />
+                <WorkClassification breakdown={analysis.data?.workClassification} />
                 <Separator />
-                <ExportOptions repositoryUrl={analysis.repositoryUrl} />
+                <ExportOptions 
+                  repositoryUrl={analysis.repositoryUrl} 
+                  analysisData={analysis.data}
+                />
               </TabsContent>
             </Tabs>
           </div>

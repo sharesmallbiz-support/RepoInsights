@@ -1,28 +1,28 @@
 import { PieChart, Code, Bug, Wrench, FileText } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-
-interface WorkBreakdown {
-  innovation: number;
-  bugFixes: number;
-  maintenance: number;
-  documentation: number;
-}
+import { type WorkClassification } from '@shared/schema';
 
 interface WorkClassificationProps {
-  breakdown?: WorkBreakdown;
+  breakdown?: WorkClassification;
 }
 
 export default function WorkClassification({ breakdown }: WorkClassificationProps) {
-  // todo: remove mock data when integrating with real API
-  const mockBreakdown: WorkBreakdown = {
-    innovation: 45,
-    bugFixes: 28,
-    maintenance: 20,
-    documentation: 7,
-  };
+  if (!breakdown) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <PieChart className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">Work Classification</h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No work classification data available. Please run an analysis first.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const data = breakdown || mockBreakdown;
+  const data = breakdown;
 
   const workTypes = [
     {
