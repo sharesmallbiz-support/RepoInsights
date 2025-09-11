@@ -1,0 +1,420 @@
+import { getUncachableGitHubClient } from './github-client';
+import type { 
+  DoraMetrics, 
+  HealthMetrics, 
+  Contributor, 
+  TimelineDay, 
+  WorkClassification 
+} from '@shared/schema';
+
+interface GitHubRepoData {
+  owner: string;
+  repo: string;
+  url: string;
+}
+
+interface CommitData {
+  sha: string;
+  message: string;
+  author: string;
+  email: string;
+  date: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+}
+
+export class GitHubAnalyzer {
+  private client: any;
+
+  constructor() {
+    this.client = null;
+  }
+
+  async initialize() {
+    this.client = await getUncachableGitHubClient();
+  }
+
+  parseGitHubUrl(url: string): GitHubRepoData {
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (!match) {
+      throw new Error('Invalid GitHub URL format');
+    }
+    
+    const [, owner, repo] = match;
+    return {
+      owner: owner.trim(),
+      repo: repo.replace('.git', '').trim(),
+      url: url.trim()
+    };
+  }
+
+  async fetchRepositoryData(owner: string, repo: string) {
+    try {
+      const { data: repository } = await this.client.repos.get({
+        owner,
+        repo,
+      });
+      return repository;
+    } catch (error: any) {
+      if (error.status === 404) {
+        throw new Error(`Repository ${owner}/${repo} not found or not accessible`);
+      }
+      throw new Error(`Failed to fetch repository: ${error.message}`);
+    }
+  }
+
+  async fetchCommits(owner: string, repo: string, since?: Date): Promise<CommitData[]> {
+    const commits: CommitData[] = [];
+    const perPage = 50; // Reduced to minimize rate limit impact
+    let page = 1;
+    const maxCommits = 500; // Reduced limit for better performance and rate limiting
+    const maxDetailedCommits = 100; // Only fetch detailed stats for recent commits
+    
+    try {
+      while (commits.length < maxCommits) {
+        const { data: commitPage } = await this.client.repos.listCommits({
+          owner,
+          repo,
+          per_page: perPage,
+          page,
+          since: since?.toISOString(),
+        });
+
+        if (commitPage.length === 0) break;
+
+        for (const commit of commitPage) {
+          // Only fetch detailed commit info for the most recent commits to avoid rate limiting
+          if (commits.length < maxDetailedCommits) {
+            try {
+              const { data: commitDetails } = await this.client.repos.getCommit({
+                owner,
+                repo,
+                ref: commit.sha,
+              });
+
+              commits.push({
+                sha: commit.sha,
+                message: commit.commit.message,
+                author: commit.commit.author?.name || 'Unknown',
+                email: commit.commit.author?.email || '',
+                date: commit.commit.author?.date || '',
+                additions: commitDetails.stats?.additions || 0,
+                deletions: commitDetails.stats?.deletions || 0,
+                changedFiles: commitDetails.files?.length || 0,
+              });
+            } catch (error) {
+              // Skip commits we can't fetch details for and continue with basic data
+              console.warn(`Could not fetch details for commit ${commit.sha}, using basic data`);
+              commits.push({
+                sha: commit.sha,
+                message: commit.commit.message,
+                author: commit.commit.author?.name || 'Unknown',
+                email: commit.commit.author?.email || '',
+                date: commit.commit.author?.date || '',
+                additions: 0, // Default to 0 if we can't get stats
+                deletions: 0,
+                changedFiles: 1, // Assume 1 file changed as minimum
+              });
+            }
+          } else {
+            // For older commits, just use basic data to avoid excessive API calls
+            commits.push({
+              sha: commit.sha,
+              message: commit.commit.message,
+              author: commit.commit.author?.name || 'Unknown',
+              email: commit.commit.author?.email || '',
+              date: commit.commit.author?.date || '',
+              additions: 0,
+              deletions: 0,
+              changedFiles: 1,
+            });
+          }
+        }
+
+        page++;
+        if (commitPage.length < perPage) break;
+      }
+      
+      console.log(`Fetched ${commits.length} commits (${Math.min(commits.length, maxDetailedCommits)} with detailed stats)`);
+      return commits;
+    } catch (error: any) {
+      if (error.message.includes('rate limit')) {
+        throw new Error('GitHub API rate limit exceeded. Please try again later.');
+      }
+      throw new Error(`Failed to fetch commits: ${error.message}`);
+    }
+  }
+
+  calculateDoraMetrics(commits: CommitData[]): DoraMetrics {
+    if (commits.length === 0) {
+      return {
+        deploymentFrequency: { value: '0 commits/day', score: 0, rating: 'low' },
+        leadTime: { value: 'No data', score: 0, rating: 'low' },
+        changeFailureRate: { value: '0%', score: 100, rating: 'elite' },
+        recoveryTime: { value: 'No data', score: 0, rating: 'low' },
+        overallScore: 0,
+        overallRating: 'low',
+      };
+    }
+
+    // Calculate deployment frequency (commits per day)
+    const sortedCommits = commits.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const firstCommit = new Date(sortedCommits[0].date);
+    const lastCommit = new Date(sortedCommits[sortedCommits.length - 1].date);
+    const daysDiff = Math.max(1, (lastCommit.getTime() - firstCommit.getTime()) / (1000 * 60 * 60 * 24));
+    const commitsPerDay = commits.length / daysDiff;
+    
+    const deploymentFrequency = {
+      value: `${commitsPerDay.toFixed(1)} commits/day`,
+      score: Math.min(100, commitsPerDay * 20),
+      rating: commitsPerDay > 1 ? 'elite' : commitsPerDay > 0.5 ? 'high' : commitsPerDay > 0.1 ? 'medium' : 'low'
+    } as const;
+
+    // Calculate lead time (average time between commits)
+    let totalTimeBetweenCommits = 0;
+    for (let i = 1; i < sortedCommits.length; i++) {
+      const timeDiff = new Date(sortedCommits[i].date).getTime() - new Date(sortedCommits[i - 1].date).getTime();
+      totalTimeBetweenCommits += timeDiff;
+    }
+    const avgTimeBetweenCommits = totalTimeBetweenCommits / Math.max(1, sortedCommits.length - 1);
+    const avgHours = avgTimeBetweenCommits / (1000 * 60 * 60);
+    
+    const leadTime = {
+      value: avgHours < 1 ? `${Math.round(avgHours * 60)} minutes` : 
+             avgHours < 24 ? `${avgHours.toFixed(1)} hours` : 
+             `${(avgHours / 24).toFixed(1)} days`,
+      score: Math.max(0, 100 - avgHours),
+      rating: avgHours < 1 ? 'elite' : avgHours < 24 ? 'high' : avgHours < 168 ? 'medium' : 'low'
+    } as const;
+
+    // Calculate change failure rate (commits with fix/bug keywords)
+    const failureKeywords = ['fix', 'bug', 'error', 'revert', 'hotfix', 'patch'];
+    const failureCommits = commits.filter(commit => 
+      failureKeywords.some(keyword => 
+        commit.message.toLowerCase().includes(keyword)
+      )
+    );
+    const changeFailureRate = (failureCommits.length / commits.length) * 100;
+    
+    const changeFailureMetric = {
+      value: `${changeFailureRate.toFixed(1)}%`,
+      score: Math.max(0, 100 - changeFailureRate * 2),
+      rating: changeFailureRate < 15 ? 'elite' : changeFailureRate < 20 ? 'high' : changeFailureRate < 30 ? 'medium' : 'low'
+    } as const;
+
+    // Calculate recovery time (average time between failure and fix)
+    const recoveryTimes: number[] = [];
+    for (let i = 0; i < failureCommits.length - 1; i++) {
+      const failureTime = new Date(failureCommits[i].date).getTime();
+      const nextCommitTime = new Date(failureCommits[i + 1].date).getTime();
+      if (nextCommitTime > failureTime) {
+        recoveryTimes.push(nextCommitTime - failureTime);
+      }
+    }
+    
+    const avgRecoveryTime = recoveryTimes.length > 0 ? 
+      recoveryTimes.reduce((a, b) => a + b, 0) / recoveryTimes.length : 0;
+    const recoveryHours = avgRecoveryTime / (1000 * 60 * 60);
+    
+    const recoveryTime = {
+      value: recoveryTimes.length === 0 ? 'No data' :
+             recoveryHours < 1 ? `${Math.round(recoveryHours * 60)} minutes` :
+             recoveryHours < 24 ? `${recoveryHours.toFixed(1)} hours` :
+             `${(recoveryHours / 24).toFixed(1)} days`,
+      score: recoveryTimes.length === 0 ? 50 : Math.max(0, 100 - recoveryHours),
+      rating: recoveryTimes.length === 0 ? 'medium' :
+              recoveryHours < 1 ? 'elite' : recoveryHours < 24 ? 'high' : recoveryHours < 168 ? 'medium' : 'low'
+    } as const;
+
+    // Calculate overall score
+    const scores = [
+      deploymentFrequency.score,
+      leadTime.score,
+      changeFailureMetric.score,
+      recoveryTime.score
+    ];
+    const overallScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    
+    const overallRating = overallScore >= 90 ? 'elite' : 
+                         overallScore >= 70 ? 'high' : 
+                         overallScore >= 50 ? 'medium' : 'low';
+
+    return {
+      deploymentFrequency,
+      leadTime,
+      changeFailureRate: changeFailureMetric,
+      recoveryTime,
+      overallScore,
+      overallRating,
+    };
+  }
+
+  calculateHealthMetrics(commits: CommitData[], repositoryData: any): HealthMetrics {
+    const totalCommits = commits.length;
+    const filesChanged = commits.reduce((sum, commit) => sum + commit.changedFiles, 0);
+    const contributors = new Set(commits.map(commit => commit.author)).size;
+    
+    // Calculate code velocity
+    const totalLines = commits.reduce((sum, commit) => sum + commit.additions + commit.deletions, 0);
+    const daysSinceFirstCommit = commits.length > 0 ? 
+      Math.max(1, (Date.now() - new Date(commits[0].date).getTime()) / (1000 * 60 * 60 * 24)) : 1;
+    const linesPerDay = Math.round(totalLines / daysSinceFirstCommit);
+    
+    // Calculate innovation ratio (non-fix commits)
+    const fixKeywords = ['fix', 'bug', 'error', 'revert', 'hotfix'];
+    const innovationCommits = commits.filter(commit => 
+      !fixKeywords.some(keyword => commit.message.toLowerCase().includes(keyword))
+    );
+    const innovationRatio = Math.round((innovationCommits.length / Math.max(1, totalCommits)) * 100);
+    
+    // Calculate technical debt (large commits)
+    const largeCommits = commits.filter(commit => commit.additions + commit.deletions > 500);
+    const technicalDebt = Math.round((largeCommits.length / Math.max(1, totalCommits)) * 100);
+    
+    // Calculate overall score
+    const deploymentScore = Math.min(100, totalCommits / 10 * 10); // 10 points per 10 commits
+    const activityScore = Math.min(100, contributors * 15); // 15 points per contributor
+    const qualityScore = Math.max(0, 100 - technicalDebt); // Reduce score for high debt
+    const overallScore = Math.round((deploymentScore + activityScore + qualityScore) / 3);
+    
+    const status = overallScore >= 90 ? 'excellent' :
+                  overallScore >= 70 ? 'good' :
+                  overallScore >= 50 ? 'fair' : 'poor';
+    
+    const lastActivity = commits.length > 0 ? 
+      this.formatTimeAgo(new Date(commits[commits.length - 1].date)) : 'No activity';
+
+    return {
+      overallScore,
+      status,
+      totalCommits,
+      filesChanged,
+      activeContributors: contributors,
+      codeVelocity: `${linesPerDay} lines/day`,
+      innovationRatio,
+      technicalDebt,
+      lastActivity,
+    };
+  }
+
+  calculateContributors(commits: CommitData[]): Contributor[] {
+    const contributorMap = new Map<string, {
+      name: string;
+      email: string;
+      commits: number;
+      linesAdded: number;
+      linesDeleted: number;
+      filesChanged: number;
+    }>();
+
+    commits.forEach(commit => {
+      const key = commit.author + commit.email;
+      const existing = contributorMap.get(key) || {
+        name: commit.author,
+        email: commit.email,
+        commits: 0,
+        linesAdded: 0,
+        linesDeleted: 0,
+        filesChanged: 0,
+      };
+
+      existing.commits++;
+      existing.linesAdded += commit.additions;
+      existing.linesDeleted += commit.deletions;
+      existing.filesChanged += commit.changedFiles;
+      
+      contributorMap.set(key, existing);
+    });
+
+    const contributors = Array.from(contributorMap.values())
+      .sort((a, b) => b.commits - a.commits)
+      .map((contributor, index) => ({
+        ...contributor,
+        rank: index + 1,
+      }));
+
+    return contributors.slice(0, 10); // Top 10 contributors
+  }
+
+  calculateTimeline(commits: CommitData[], days: number = 20): TimelineDay[] {
+    const endDate = new Date();
+    const timeline: TimelineDay[] = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(endDate);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      
+      const dayCommits = commits.filter(commit => {
+        const commitDate = new Date(commit.date);
+        return commitDate.toDateString() === date.toDateString();
+      });
+
+      const commitCount = dayCommits.length;
+      const linesChanged = dayCommits.reduce((sum, commit) => sum + commit.additions + commit.deletions, 0);
+      
+      const activity = commitCount >= 10 ? 'very-high' :
+                      commitCount >= 5 ? 'high' :
+                      commitCount >= 2 ? 'medium' :
+                      commitCount >= 1 ? 'low' : 'none';
+
+      timeline.push({
+        date: dateStr,
+        commits: commitCount,
+        linesChanged,
+        activity,
+      });
+    }
+
+    return timeline;
+  }
+
+  calculateWorkClassification(commits: CommitData[]): WorkClassification {
+    if (commits.length === 0) {
+      return { innovation: 0, bugFixes: 0, maintenance: 0, documentation: 0 };
+    }
+
+    const categories = {
+      innovation: 0,
+      bugFixes: 0,
+      maintenance: 0,
+      documentation: 0,
+    };
+
+    commits.forEach(commit => {
+      const message = commit.message.toLowerCase();
+      
+      if (message.includes('fix') || message.includes('bug') || message.includes('error')) {
+        categories.bugFixes++;
+      } else if (message.includes('refactor') || message.includes('cleanup') || message.includes('optimize')) {
+        categories.maintenance++;
+      } else if (message.includes('doc') || message.includes('readme') || message.includes('comment')) {
+        categories.documentation++;
+      } else {
+        categories.innovation++;
+      }
+    });
+
+    const total = commits.length;
+    return {
+      innovation: Math.round((categories.innovation / total) * 100),
+      bugFixes: Math.round((categories.bugFixes / total) * 100),
+      maintenance: Math.round((categories.maintenance / total) * 100),
+      documentation: Math.round((categories.documentation / total) * 100),
+    };
+  }
+
+  private formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffHours < 1) return 'Less than an hour ago';
+    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    if (diffDays === 1) return '1 day ago';
+    if (diffDays < 30) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  }
+}

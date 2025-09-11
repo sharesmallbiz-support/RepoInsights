@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 
 interface GitHubURLInputProps {
-  onAnalyze?: (url: string, type: 'repository' | 'organization' | 'user') => void;
+  onAnalyze?: (url: string, type: 'repository') => void;
   isLoading?: boolean;
 }
 
@@ -13,16 +13,17 @@ export default function GitHubURLInput({ onAnalyze, isLoading = false }: GitHubU
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
 
-  const detectUrlType = (url: string): 'repository' | 'organization' | 'user' | null => {
-    const githubPattern = /^https:\/\/github\.com\/([^\/]+)(\/([^\/]+))?/;
+  const detectUrlType = (url: string): 'repository' | null => {
+    const githubPattern = /^https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/?$/;
     const match = url.match(githubPattern);
     
     if (!match) return null;
     
-    const [, owner, , repo] = match;
-    if (repo) return 'repository';
-    // For simplicity, assume single path is user (could be org too)
-    return 'user';
+    const [, owner, repo] = match;
+    if (owner && repo && !repo.includes('/')) {
+      return 'repository';
+    }
+    return null;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,12 +85,13 @@ export default function GitHubURLInput({ onAnalyze, isLoading = false }: GitHubU
         )}
         
         <div className="text-sm text-muted-foreground">
-          <p className="mb-2">Supported URL types:</p>
+          <p className="mb-2">Supported URL format:</p>
           <ul className="space-y-1 ml-4">
             <li>• Repository: https://github.com/owner/repository</li>
-            <li>• Organization: https://github.com/organization</li>
-            <li>• User: https://github.com/username</li>
           </ul>
+          <p className="mt-2 text-xs">
+            <strong>Note:</strong> Organization and user analysis will be available in future updates.
+          </p>
         </div>
       </form>
     </Card>

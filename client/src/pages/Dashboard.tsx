@@ -18,7 +18,7 @@ interface AnalysisState {
   isAnalyzing: boolean;
   hasResults: boolean;
   repositoryUrl: string;
-  analysisType: 'repository' | 'organization' | 'user' | null;
+  analysisType: 'repository' | null;
 }
 
 export default function Dashboard() {
@@ -29,7 +29,7 @@ export default function Dashboard() {
     analysisType: null,
   });
 
-  const handleAnalyze = async (url: string, type: 'repository' | 'organization' | 'user') => {
+  const handleAnalyze = async (url: string, type: 'repository') => {
     setAnalysis({
       isAnalyzing: true,
       hasResults: false,
