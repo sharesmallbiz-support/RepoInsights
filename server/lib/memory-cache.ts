@@ -5,6 +5,7 @@ interface CacheEntry<T> {
 }
 
 export class MemoryCache {
+  private static instance: MemoryCache | null = null;
   private cache = new Map<string, CacheEntry<any>>();
   private stats = {
     hits: 0,
@@ -13,7 +14,14 @@ export class MemoryCache {
     evictions: 0,
   };
 
-  constructor(private defaultTTL: number = 5 * 60 * 1000) {} // 5 minutes default
+  private constructor(private defaultTTL: number = 5 * 60 * 1000) {} // 5 minutes default
+
+  static getInstance(defaultTTL?: number): MemoryCache {
+    if (!MemoryCache.instance) {
+      MemoryCache.instance = new MemoryCache(defaultTTL || 5 * 60 * 1000);
+    }
+    return MemoryCache.instance;
+  }
 
   set<T>(key: string, data: T, ttl?: number): void {
     const entry: CacheEntry<T> = {

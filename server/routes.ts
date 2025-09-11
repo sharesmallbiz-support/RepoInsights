@@ -283,9 +283,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API Statistics endpoint
   app.get("/api/stats", async (req, res) => {
     try {
-      const analyzer = new GitHubAnalyzer();
-      await analyzer.initialize();
-      const stats = analyzer.getApiStats();
+      const { ApiStatsTracker } = await import('./lib/api-stats.js');
+      const { MemoryCache } = await import('./lib/memory-cache.js');
+      
+      // Get the shared cache instance
+      const cache = MemoryCache.getInstance();
+      const statsTracker = ApiStatsTracker.getInstance();
+      
+      const stats = {
+        cache: cache.getStats(),
+        api: statsTracker.getStats(),
+      };
       
       res.json({
         success: true,

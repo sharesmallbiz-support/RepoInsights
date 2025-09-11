@@ -7,6 +7,7 @@ interface ApiCall {
 }
 
 export class ApiStatsTracker {
+  private static instance: ApiStatsTracker | null = null;
   private calls: ApiCall[] = [];
   private endpointStats = new Map<string, {
     count: number;
@@ -14,6 +15,17 @@ export class ApiStatsTracker {
     avgResponseTime: number;
     lastCalled: number;
   }>();
+
+  private constructor() {
+    // Private constructor for singleton
+  }
+
+  static getInstance(): ApiStatsTracker {
+    if (!ApiStatsTracker.instance) {
+      ApiStatsTracker.instance = new ApiStatsTracker();
+    }
+    return ApiStatsTracker.instance;
+  }
 
   trackCall(endpoint: string, method: string = 'GET', fromCache: boolean = false, responseTime?: number): void {
     const call: ApiCall = {

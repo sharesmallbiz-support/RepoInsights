@@ -40,8 +40,8 @@ export class GitHubAnalyzer {
 
   constructor() {
     this.client = null;
-    this.cache = new MemoryCache(10 * 60 * 1000); // 10 minute cache
-    this.stats = new ApiStatsTracker();
+    this.cache = MemoryCache.getInstance(10 * 60 * 1000); // 10 minute cache
+    this.stats = ApiStatsTracker.getInstance();
     
     // Run cleanup every 5 minutes
     setInterval(() => {
