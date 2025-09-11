@@ -107,6 +107,14 @@ export const WorkClassificationSchema = z.object({
 });
 
 // User Analysis Specific Types
+export const OrganizationSchema = z.object({
+  login: z.string(),
+  name: z.string().nullable(),
+  avatarUrl: z.string(),
+  description: z.string().nullable(),
+  publicRepos: z.number().optional(),
+});
+
 export const UserProfileSchema = z.object({
   username: z.string(),
   name: z.string().nullable(),
@@ -119,6 +127,7 @@ export const UserProfileSchema = z.object({
   company: z.string().nullable(),
   location: z.string().nullable(),
   bio: z.string().nullable(),
+  organizations: z.array(OrganizationSchema),
 });
 
 export const PortfolioSummarySchema = z.object({

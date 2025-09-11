@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Calendar, Users, UserPlus, Github } from 'lucide-react';
+import { MapPin, Calendar, Users, UserPlus, Github, Building } from 'lucide-react';
 import type { UserProfile } from '@shared/schema';
 
 interface UserOverviewCardProps {
@@ -100,6 +100,44 @@ export default function UserOverviewCard({ userProfile }: UserOverviewCardProps)
               <div className="font-medium" data-testid="text-company">
                 {userProfile.company}
               </div>
+            </div>
+          </>
+        )}
+
+        {userProfile.organizations && userProfile.organizations.length > 0 && (
+          <>
+            <Separator />
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Building className="h-5 w-5" />
+                Organizations ({userProfile.organizations.length})
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" data-testid="list-organizations">
+                {userProfile.organizations.slice(0, 8).map((org) => (
+                  <div key={org.login} className="flex items-center gap-2 p-2 bg-muted rounded-md" data-testid={`org-${org.login}`}>
+                    <img
+                      src={org.avatarUrl}
+                      alt={org.name || org.login}
+                      className="w-6 h-6 rounded-full"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate" data-testid={`text-org-name-${org.login}`}>
+                        {org.name || org.login}
+                      </div>
+                      {org.publicRepos && (
+                        <div className="text-xs text-muted-foreground" data-testid={`text-org-repos-${org.login}`}>
+                          {org.publicRepos} repos
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {userProfile.organizations.length > 8 && (
+                <p className="text-sm text-muted-foreground mt-2" data-testid="text-more-orgs">
+                  and {userProfile.organizations.length - 8} more...
+                </p>
+              )}
             </div>
           </>
         )}

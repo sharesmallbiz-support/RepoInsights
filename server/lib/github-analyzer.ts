@@ -98,7 +98,21 @@ export class GitHubAnalyzer {
     }
   }
 
-  async fetchUserRepositories(username: string, maxRepos: number = 10): Promise<any[]> {
+  async fetchUserOrganizations(username: string): Promise<any[]> {
+    try {
+      const { data: orgs } = await this.client.orgs.listForUser({
+        username,
+        per_page: 20,
+      });
+      console.log(`Fetched ${orgs.length} organizations for user ${username}`);
+      return orgs;
+    } catch (error: any) {
+      console.warn(`Could not fetch organizations for ${username}:`, error.message);
+      return []; // Return empty array if organizations are private or error occurs
+    }
+  }
+
+  async fetchUserRepositories(username: string, maxRepos: number = 25): Promise<any[]> {
     try {
       const repos: any[] = [];
       let page = 1;
@@ -121,11 +135,15 @@ export class GitHubAnalyzer {
         if (repoPage.length < perPage) break;
       }
 
-      // Filter out forks to focus on original repositories for meaningful analysis
+      // Keep both original and forked repositories, but prioritize original ones
       const originalRepos = repos.filter(repo => !repo.fork);
-      console.log(`Fetched ${originalRepos.length} original repositories for user ${username}`);
+      const forkedRepos = repos.filter(repo => repo.fork);
       
-      return originalRepos.slice(0, Math.min(maxRepos, originalRepos.length));
+      console.log(`Fetched ${originalRepos.length} original and ${forkedRepos.length} forked repositories for user ${username}`);
+      
+      // Return up to maxRepos repositories, prioritizing original repositories
+      const prioritizedRepos = [...originalRepos, ...forkedRepos];
+      return prioritizedRepos.slice(0, Math.min(maxRepos, prioritizedRepos.length));
     } catch (error: any) {
       throw new Error(`Failed to fetch user repositories: ${error.message}`);
     }
@@ -478,8 +496,8 @@ export class GitHubAnalyzer {
     // Fetch user data
     const userData = await this.fetchUserData(username);
     
-    // Fetch user's repositories (limit to 10 for performance)
-    const repositories = await this.fetchUserRepositories(username, 10);
+    // Fetch user's repositories (increased limit to 25 for better portfolio coverage)
+    const repositories = await this.fetchUserRepositories(username, 25);
     
     if (repositories.length === 0) {
       throw new Error(`No public repositories found for user ${username}`);
@@ -521,8 +539,11 @@ export class GitHubAnalyzer {
     const timeline = this.calculateTimeline(allCommits);
     const workClassification = this.calculateWorkClassification(allCommits);
     
+    // Fetch user organizations
+    const organizations = await this.fetchUserOrganizations(username);
+    
     // Build user-focused analysis instead of aggregated repository metrics
-    const userAnalysis = this.buildUserAnalysis(userData, repositories, allCommits);
+    const userAnalysis = this.buildUserAnalysis(userData, repositories, allCommits, organizations);
     
     return {
       userAnalysis,
@@ -595,8 +616,8 @@ export class GitHubAnalyzer {
     return date.toLocaleDateString();
   }
 
-  private buildUserAnalysis(userData: any, repositories: any[], commits: CommitData[]): UserAnalysis {
-    const userProfile = this.buildUserProfile(userData);
+  private buildUserAnalysis(userData: any, repositories: any[], commits: CommitData[], organizations: any[]): UserAnalysis {
+    const userProfile = this.buildUserProfile(userData, organizations);
     const portfolioSummary = this.buildPortfolioSummary(repositories);
     const activityMetrics = this.buildActivityMetrics(commits);
     const bestPractices = this.buildBestPractices(repositories);
@@ -611,10 +632,18 @@ export class GitHubAnalyzer {
     };
   }
 
-  private buildUserProfile(userData: any): UserProfile {
+  private buildUserProfile(userData: any, organizations: any[]): UserProfile {
     const accountAge = userData.created_at 
       ? Math.floor((Date.now() - new Date(userData.created_at).getTime()) / (1000 * 60 * 60 * 24))
       : 0;
+
+    const formattedOrganizations = organizations.map(org => ({
+      login: org.login,
+      name: org.name || null,
+      avatarUrl: org.avatar_url,
+      description: org.description || null,
+      publicRepos: org.public_repos || undefined,
+    }));
 
     return {
       username: userData.login,
@@ -628,6 +657,7 @@ export class GitHubAnalyzer {
       company: userData.company,
       location: userData.location,
       bio: userData.bio,
+      organizations: formattedOrganizations,
     };
   }
 
