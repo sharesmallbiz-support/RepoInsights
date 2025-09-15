@@ -1,8 +1,8 @@
-# GitHub Repository Analytics Tool
+# GitHubSpark - Next Generation GitHub Analytics
 
 ## Overview
 
-A comprehensive GitHub repository analysis tool that provides DORA metrics, contributor insights, and repository health assessments for development teams. The application allows users to analyze public GitHub repositories by entering a GitHub URL and generates detailed analytics including deployment frequency, lead time for changes, contributor statistics, work classification, and repository health metrics. Built as a full-stack web application with a React frontend and Express.js backend, it's designed to help development teams, project managers, and engineering leaders make data-driven decisions about development processes.
+GitHubSpark is the next iteration of GitHub repository analytics by Mark Hazleton (https://webspark.markhazleton.com/GitHubSpark). This comprehensive tool provides DORA metrics, contributor insights, and repository health assessments for development teams. The application allows users to analyze public GitHub repositories and users by entering a GitHub URL and generates detailed analytics including deployment frequency, lead time for changes, contributor statistics, work classification, and repository health metrics. Built as a full-stack web application with a React frontend and Express.js backend, it's designed to help development teams, project managers, and engineering leaders make data-driven decisions about development processes.
 
 ## User Preferences
 

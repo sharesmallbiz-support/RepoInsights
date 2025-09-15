@@ -1,4 +1,4 @@
-# GitHub Repository Analysis Tool - Design Guidelines
+# GitHubSpark - Design Guidelines
 
 ## Design Approach
 **Design System Approach**: Using a data-focused design system optimized for analytics dashboards and developer tools. Drawing inspiration from Linear, GitHub's interface, and Vercel's clean aesthetic for technical products.

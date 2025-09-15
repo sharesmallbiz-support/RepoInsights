@@ -113,9 +113,9 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <Github className="h-8 w-8 text-primary" />
                 <div>
-                  <h1 className="text-2xl font-bold">GitHub Analytics</h1>
+                  <h1 className="text-2xl font-bold">GitHubSpark</h1>
                   <p className="text-sm text-muted-foreground">
-                    DORA Metrics & Repository Insights
+                    Next Generation GitHub Analytics by Mark Hazleton
                   </p>
                 </div>
               </div>
@@ -154,11 +154,49 @@ export default function Dashboard() {
           <div className="max-w-4xl mx-auto space-y-8">
             {/* Welcome Section */}
             <div className="text-center space-y-4">
-              <h2 className="text-3xl font-bold">Analyze GitHub Repositories</h2>
+              <h2 className="text-3xl font-bold">Spark Your GitHub Insights</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Get comprehensive insights into repository health, developer productivity, 
-                DORA metrics, and team collaboration patterns.
+                Discover comprehensive repository analytics, developer productivity metrics, 
+                DORA insights, and collaboration patterns with GitHubSpark.
               </p>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex flex-col space-y-4">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold mb-4">Quick Start</h3>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Button
+                    onClick={() => handleAnalyze('https://github.com/markhazleton', 'user')}
+                    disabled={analysis.isAnalyzing}
+                    className="flex items-center gap-2"
+                    data-testid="button-quick-user-markhazleton"
+                  >
+                    <Users className="h-4 w-4" />
+                    Analyze Mark Hazleton
+                  </Button>
+                  <Button
+                    onClick={() => handleAnalyze('https://github.com/markhazleton/WebSpark', 'repository')}
+                    disabled={analysis.isAnalyzing}
+                    className="flex items-center gap-2"
+                    data-testid="button-quick-repo-webspark"
+                  >
+                    <Github className="h-4 w-4" />
+                    Analyze WebSpark Project
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or analyze any repository</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* URL Input */}
@@ -312,8 +350,11 @@ export default function Dashboard() {
         <div className="container mx-auto px-6 py-8">
           <div className="text-center text-sm text-muted-foreground">
             <p>
+              GitHubSpark - Next Generation GitHub Analytics by <strong>Mark Hazleton</strong>
+            </p>
+            <p className="mt-2">
               Built with React, TypeScript, and TailwindCSS. 
-              Providing comprehensive GitHub repository analytics and DORA metrics.
+              Empowering developers with actionable repository insights and DORA metrics.
             </p>
           </div>
         </div>
