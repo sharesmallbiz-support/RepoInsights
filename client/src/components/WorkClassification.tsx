@@ -32,6 +32,7 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
       color: 'text-success',
       bgColor: 'bg-success',
       description: 'New features and improvements',
+      keywords: 'Commits not matching other categories (default classification)',
     },
     {
       type: 'Bug Fixes',
@@ -40,6 +41,7 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
       color: 'text-warning',
       bgColor: 'bg-warning',
       description: 'Issue resolution and error fixes',
+      keywords: 'Contains: "fix", "bug", "error"',
     },
     {
       type: 'Maintenance',
@@ -48,6 +50,7 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
       color: 'text-chart-2',
       bgColor: 'bg-chart-2',
       description: 'Code refactoring and optimization',
+      keywords: 'Contains: "refactor", "cleanup", "optimize"',
     },
     {
       type: 'Documentation',
@@ -56,6 +59,7 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
       color: 'text-muted-foreground',
       bgColor: 'bg-muted',
       description: 'Documentation updates and comments',
+      keywords: 'Contains: "doc", "readme", "comment"',
     },
   ];
 
@@ -100,8 +104,11 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
                   </span>
                 </div>
                 <Progress value={work.percentage} className="h-2" />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-1">
                   {work.description}
+                </p>
+                <p className="text-xs text-muted-foreground/70">
+                  {work.keywords}
                 </p>
               </div>
             ))}
@@ -169,6 +176,57 @@ export default function WorkClassification({ breakdown }: WorkClassificationProp
           </div>
         </Card>
       </div>
+
+      {/* Methodology Explanation */}
+      <Card className="p-6">
+        <h3 className="font-semibold text-lg mb-4">How Metrics Are Calculated</h3>
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg bg-muted/30">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Commit Message Analysis
+            </h4>
+            <p className="text-sm text-muted-foreground mb-3">
+              Work classification is determined by analyzing commit messages from the repository. 
+              Each commit is categorized based on keywords found in its message (case-insensitive matching).
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {workTypes.map((work, index) => (
+                <div key={index} className="border border-border rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={work.color}>{work.icon}</span>
+                    <span className="font-medium text-sm">{work.type}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {work.keywords}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-lg bg-muted/20">
+            <h4 className="font-medium mb-2">Calculation Method</h4>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>• <strong>Data Source:</strong> Analysis uses commits from the last 90 days or up to 500 commits, whichever is smaller</p>
+              <p>• <strong>Classification Priority:</strong> Keywords are checked in order: Bug Fixes → Maintenance → Documentation → Innovation (default)</p>
+              <p>• <strong>Percentage Calculation:</strong> (Commits in category ÷ Total commits) × 100, rounded to nearest whole number</p>
+              <p>• <strong>Innovation Category:</strong> All commits that don't match other keyword patterns are classified as innovation work</p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-lg bg-warning/10 border border-warning/20">
+            <h4 className="font-medium mb-2 text-warning">Methodology Limitations</h4>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p>• Classification relies on commit message content and may not capture all nuances of actual work performed</p>
+              <p>• Developers with inconsistent commit message practices may skew results</p>
+              <p>• Large commits combining multiple work types are classified by the first matching keyword</p>
+              <p>• The analysis provides trends and patterns rather than precise work accounting</p>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
