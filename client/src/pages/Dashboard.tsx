@@ -20,6 +20,7 @@ import UserPortfolio from '@/components/user/UserPortfolio';
 import UserActivity from '@/components/user/UserActivity';
 import UserBestPractices from '@/components/user/UserBestPractices';
 import UserImpact from '@/components/user/UserImpact';
+import { UserMenu } from '@/components/user/UserMenu';
 import ApiStats from '@/components/ApiStats';
 import { apiRequest } from '@/lib/queryClient';
 import type { AnalysisResponse, RepositoryAnalysisResponse, UserAnalysisResponse } from '@shared/schema';
@@ -134,8 +135,8 @@ export default function Dashboard() {
             
             <div className="flex items-center gap-4">
               {analysis.hasResults && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={resetAnalysis}
                   data-testid="button-new-analysis"
                   className="hover-elevate"
@@ -143,6 +144,7 @@ export default function Dashboard() {
                   New Analysis
                 </Button>
               )}
+              <UserMenu />
               <ThemeToggle />
             </div>
           </div>

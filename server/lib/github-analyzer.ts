@@ -1,18 +1,19 @@
 import { getUncachableGitHubClient } from './github-client';
 import { MemoryCache } from './memory-cache';
 import { ApiStatsTracker } from './api-stats';
-import type { 
-  DoraMetrics, 
-  HealthMetrics, 
-  Contributor, 
-  TimelineDay, 
+import type {
+  DoraMetrics,
+  HealthMetrics,
+  Contributor,
+  TimelineDay,
   WorkClassification,
   UserProfile,
   PortfolioSummary,
   ActivityMetrics,
   BestPractices,
   Impact,
-  UserAnalysis
+  UserAnalysis,
+  User
 } from '@shared/schema';
 
 interface GitHubRepoData {
@@ -49,8 +50,14 @@ export class GitHubAnalyzer {
     }, 5 * 60 * 1000);
   }
 
-  async initialize() {
-    this.client = await getUncachableGitHubClient();
+  /**
+   * Initialize the GitHub client with authentication.
+   *
+   * @param user - Optional authenticated user. If provided, uses user's OAuth token.
+   *               Otherwise, falls back to server GITHUB_TOKEN.
+   */
+  async initialize(user?: User) {
+    this.client = await getUncachableGitHubClient(user);
   }
 
   private async cachedApiCall<T>(

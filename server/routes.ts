@@ -124,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Initialize GitHub analyzer
       const analyzer = new GitHubAnalyzer();
-      await analyzer.initialize();
+      await analyzer.initialize(req.user as User | undefined);
 
       // Parse GitHub URL to determine type (repository or user)
       const parseResult = analyzer.parseGitHubUrl(url);
