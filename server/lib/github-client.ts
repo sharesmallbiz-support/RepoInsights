@@ -1,45 +1,40 @@
 import { Octokit } from '@octokit/rest';
 
-let connectionSettings: any;
+/**
+ * Gets GitHub access token from environment variables.
+ *
+ * For Azure App Service, set the GITHUB_TOKEN environment variable
+ * with a GitHub Personal Access Token (PAT) or OAuth token.
+ *
+ * Required scopes: repo, read:user, read:org
+ */
+async function getAccessToken(): Promise<string> {
+  const token = process.env.GITHUB_TOKEN;
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+  if (!token) {
+    throw new Error(
+      'GITHUB_TOKEN environment variable is not set. ' +
+      'Please configure a GitHub Personal Access Token with repo, read:user, and read:org scopes.'
+    );
   }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=github',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('GitHub not connected');
-  }
-  return accessToken;
+  return token;
 }
 
-// WARNING: Never cache this client.
-// Access tokens expire, so a new client must be created each time.
-// Always call this function again to get a fresh client.
-export async function getUncachableGitHubClient() {
+/**
+ * Creates a new GitHub API client.
+ *
+ * WARNING: Never cache this client instance.
+ * Access tokens may expire, so a new client should be created for each request.
+ * Always call this function to get a fresh client.
+ *
+ * @returns Promise<Octokit> - A new Octokit client instance
+ */
+export async function getUncachableGitHubClient(): Promise<Octokit> {
   const accessToken = await getAccessToken();
-  return new Octokit({ auth: accessToken });
+  return new Octokit({
+    auth: accessToken,
+    userAgent: 'GitHubSpark/1.0.0',
+    baseUrl: 'https://api.github.com'
+  });
 }
