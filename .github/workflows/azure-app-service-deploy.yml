@@ -1,0 +1,63 @@
+# GitHub Actions workflow for deploying to Azure App Service
+# This workflow builds and deploys the GitHubSpark application to Azure App Service
+
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches:
+      - main  # Deploy on push to main branch
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  NODE_VERSION: '20.x'  # Node.js version to use
+  AZURE_WEBAPP_NAME: 'your-app-name'  # TODO: Replace with your Azure App Service name
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npm run check
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Create deployment package
+        run: |
+          # Create a zip file with only necessary files for deployment
+          mkdir -p deploy
+          cp -r dist deploy/
+          cp package.json deploy/
+          cp package-lock.json deploy/
+          # Note: node_modules will be installed on Azure App Service
+          cd deploy && zip -r ../deployment.zip . && cd ..
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deployment.zip
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "🚀 Application URL: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          echo "📊 API Stats: https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/stats"

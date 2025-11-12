@@ -1,45 +1,55 @@
 import { Octokit } from '@octokit/rest';
+import type { User } from '@shared/schema';
 
-let connectionSettings: any;
-
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+/**
+ * Gets GitHub access token from user or environment variables.
+ *
+ * Priority:
+ * 1. User's OAuth token (if logged in)
+ * 2. Server GITHUB_TOKEN environment variable (fallback)
+ *
+ * Required scopes: repo, read:user, read:org
+ *
+ * @param user - Optional authenticated user with GitHub token
+ * @returns Promise<string> - GitHub access token
+ */
+async function getAccessToken(user?: User): Promise<string> {
+  // Priority 1: Use authenticated user's token
+  if (user?.githubAccessToken) {
+    return user.githubAccessToken;
   }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+  // Priority 2: Use server-configured token
+  const serverToken = process.env.GITHUB_TOKEN;
+  if (serverToken) {
+    return serverToken;
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=github',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('GitHub not connected');
-  }
-  return accessToken;
+  // No token available
+  throw new Error(
+    'No GitHub authentication available. ' +
+    'Either login with GitHub or configure GITHUB_TOKEN environment variable.'
+  );
 }
 
-// WARNING: Never cache this client.
-// Access tokens expire, so a new client must be created each time.
-// Always call this function again to get a fresh client.
-export async function getUncachableGitHubClient() {
-  const accessToken = await getAccessToken();
-  return new Octokit({ auth: accessToken });
+/**
+ * Creates a new GitHub API client.
+ *
+ * If a user is provided, uses their OAuth token (better rate limits, access to private repos).
+ * Otherwise, falls back to server GITHUB_TOKEN if configured.
+ *
+ * WARNING: Never cache this client instance.
+ * Access tokens may expire, so a new client should be created for each request.
+ * Always call this function to get a fresh client.
+ *
+ * @param user - Optional authenticated user with GitHub token
+ * @returns Promise<Octokit> - A new Octokit client instance
+ */
+export async function getUncachableGitHubClient(user?: User): Promise<Octokit> {
+  const accessToken = await getAccessToken(user);
+  return new Octokit({
+    auth: accessToken,
+    userAgent: 'GitHubSpark/1.0.0',
+    baseUrl: 'https://api.github.com'
+  });
 }
