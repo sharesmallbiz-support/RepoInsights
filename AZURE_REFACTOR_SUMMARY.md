@@ -8,13 +8,9 @@ This document summarizes the changes made to prepare GitHubSpark for deployment 
 
 **File**: `server/lib/github-client.ts`
 
-**Before** (Replit-specific):
-- Used Replit Connectors API for GitHub OAuth
-- Required `REPLIT_CONNECTORS_HOSTNAME`, `REPL_IDENTITY`, `WEB_REPL_RENEWAL` environment variables
-- Automatically fetched and refreshed GitHub access tokens
-
-**After** (Standard OAuth):
-- Uses environment variable `GITHUB_TOKEN` directly
+**Changes**:
+- Removed third-party OAuth connector dependencies
+- Now uses environment variable `GITHUB_TOKEN` directly
 - Requires GitHub Personal Access Token (PAT) or OAuth token
 - Simpler implementation compatible with any hosting platform
 
@@ -55,29 +51,13 @@ This document summarizes the changes made to prepare GitHubSpark for deployment 
 **File**: `vite.config.ts`
 
 **Changes**:
-- Made Replit runtime error overlay plugin conditional (only loads in Replit dev environment)
-- Prevents loading Replit-specific plugins in production or non-Replit environments
-- No breaking changes - still compatible with Replit
+- Removed third-party development plugins
+- Simplified plugin configuration to use only React plugin
+- Cleaner build configuration for production deployments
 
-**Before**:
+**Configuration**:
 ```typescript
-plugins: [
-  react(),
-  runtimeErrorOverlay(),  // Always loaded
-  // ...
-]
-```
-
-**After**:
-```typescript
-plugins: [
-  react(),
-  // Only in Replit dev environment
-  ...(process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined
-    ? [runtimeErrorOverlay()]
-    : []),
-  // ...
-]
+plugins: [react()]
 ```
 
 ---
@@ -152,7 +132,7 @@ plugins: [
 
 ### ✅ Build Process
 - Build scripts remain unchanged (`npm run build`, `npm start`)
-- Vite configuration compatible with both Replit and Azure
+- Simplified Vite configuration for production deployments
 - esbuild configuration unchanged
 
 ### ✅ Database
@@ -169,11 +149,6 @@ plugins: [
 ---
 
 ## Compatibility
-
-### Replit
-- ✅ Still works on Replit with `.replit` configuration
-- ✅ Replit-specific plugins only load in Replit environment
-- ⚠️ Requires setting `GITHUB_TOKEN` (no longer uses Connectors)
 
 ### Azure App Service
 - ✅ Fully compatible with Node 20 LTS
@@ -192,7 +167,7 @@ plugins: [
 
 ## Migration Checklist
 
-### From Replit to Azure App Service
+### Deploying to Azure App Service
 
 - [ ] **Create Azure App Service**
   - Resource Group: `githubspark-rg`
@@ -275,23 +250,9 @@ After deploying to Azure, test:
 
 ---
 
-## Rollback Plan
+## Troubleshooting
 
-If issues occur, you can quickly rollback:
-
-### Option 1: Revert to Replit
-
-1. Keep using Replit deployment
-2. Set up Replit Connector for GitHub
-3. Remove `GITHUB_TOKEN` environment variable
-4. Revert changes to `server/lib/github-client.ts`:
-   ```bash
-   git revert <commit-hash>
-   ```
-
-### Option 2: Fix Forward
-
-Most issues can be resolved by:
+If issues occur during deployment, most can be resolved by:
 1. Verifying `GITHUB_TOKEN` is set correctly
 2. Checking token scopes and expiration
 3. Verifying `DATABASE_URL` format
@@ -410,20 +371,20 @@ Most issues can be resolved by:
 
 ### ✅ What Was Accomplished
 
-1. **Removed Replit Dependencies**: GitHub OAuth now uses standard tokens
+1. **Simplified Authentication**: GitHub OAuth now uses standard tokens
 2. **Added Azure Configuration**: Deployment files and scripts
 3. **Created Documentation**: Comprehensive guides (3 documents, 1000+ lines)
 4. **Set Up CI/CD**: GitHub Actions workflow for automated deployment
-5. **Maintained Compatibility**: App still works on Replit and other platforms
+5. **Removed Third-Party Dependencies**: Cleaner, more maintainable codebase
 6. **Preserved Functionality**: No application logic changes
 
 ### 📊 Impact
 
 - **Breaking Changes**: GitHub OAuth token management only
 - **Migration Time**: 20 minutes (following quick start guide)
-- **Cost**: $13/month (vs $0-20 on Replit)
-- **Performance**: Better (Always On, no cold starts)
-- **Scalability**: Easier (managed auto-scaling)
+- **Cost**: $13/month (Basic B1 tier)
+- **Performance**: Excellent (Always On, no cold starts)
+- **Scalability**: Enterprise-ready (managed auto-scaling)
 
 ### 🎯 Next Steps
 

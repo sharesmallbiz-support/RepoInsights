@@ -15,7 +15,6 @@
 - **Backend**: Express.js with custom API routes
 - **Database**: PostgreSQL (via Neon serverless driver)
 - **External APIs**: GitHub REST API (via Octokit)
-- **Current Host**: Replit with port 5000
 - **Entry Point**: Single Node.js process serving both API and static files
 
 ---
@@ -128,18 +127,16 @@ export const storage = new MemStorage();
 
 ### 5. **GitHub OAuth Integration** ⚠️ INTEGRATION ISSUE
 
-**Issue**: Current GitHub authentication uses Replit-specific connectors.
+**Issue**: GitHub authentication needs proper configuration for Azure environments.
 
-**Current Implementation** (`server/lib/github-client.ts:5-37`):
+**Current Implementation** (`server/lib/github-client.ts`):
 ```typescript
-async function getAccessToken() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? 'repl ' + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL
-    : null;
-  // Fetches from Replit Connectors API
+async function getAccessToken(): Promise<string> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    throw new Error('GITHUB_TOKEN environment variable is not set.');
+  }
+  return token;
 }
 ```
 
@@ -147,15 +144,17 @@ async function getAccessToken() {
 - Requires Azure App Registration
 - OAuth flow must be handled in Azure Functions
 - Token storage needs external mechanism (Key Vault, database)
-- No automatic token refresh like Replit provides
+- Must implement token refresh mechanism
 
-**Required Changes**:
-- Set up Azure App Registration for GitHub OAuth
-- Implement OAuth flow in Azure Functions
-- Store/refresh tokens in Key Vault or database
-- Update client to handle Azure-based auth flow
+**Azure App Service Approach**:
+- Simple environment variable configuration
+- Set `GITHUB_TOKEN` in Application Settings
+- Can use GitHub Personal Access Token or OAuth
+- Standard OAuth implementation with passport.js (already included)
 
-**Impact**: 🟡 **MEDIUM** - Requires OAuth reimplementation (estimated 10-15 hours)
+**Impact**:
+- Static Web Apps: 🟡 **MEDIUM** - Requires OAuth reimplementation (10-15 hours)
+- App Service: 🟢 **LOW** - Simple configuration (1-2 hours)
 
 ---
 
@@ -321,17 +320,16 @@ async function getAccessToken() {
 
 | Task | Effort (Hours) | Risk |
 |------|---------------|------|
-| Update GitHub OAuth (remove Replit) | 8-12 | Low |
 | Configure Azure App Service | 2-4 | Low |
 | Set up CI/CD pipeline | 3-5 | Low |
-| Environment variable configuration | 1-2 | Low |
+| Environment variable configuration | 2-3 | Low |
 | Database connection testing | 2-3 | Low |
 | Testing and debugging | 5-10 | Low |
-| **Total** | **21-36 hours** | **Low** |
+| **Total** | **14-25 hours** | **Low** |
 
-**Estimated Cost**: $2,100 - $3,600 (at $100/hour developer rate)
+**Estimated Cost**: $1,400 - $2,500 (at $100/hour developer rate)
 
-**Savings vs Static Web Apps**: $11,400 - $15,900
+**Savings vs Static Web Apps**: $12,000 - $17,000
 
 ---
 
@@ -364,11 +362,10 @@ async function getAccessToken() {
 **Complexity Level**: 🟢 **LOW**
 
 **Steps**:
-1. Update GitHub OAuth configuration (remove Replit connectors)
-2. Create Azure App Service resource
-3. Configure environment variables
-4. Set up deployment from GitHub (one-click)
-5. Test deployment
+1. Create Azure App Service resource
+2. Configure environment variables
+3. Set up deployment from GitHub (one-click)
+4. Test deployment
 
 **Ongoing Maintenance**: Low (standard Node.js app monitoring)
 
@@ -605,23 +602,23 @@ server.listen({
 
 **Reasoning**:
 
-1. **Minimal Refactoring**: Only GitHub OAuth needs updating (~30 hours vs ~165 hours)
+1. **Minimal Setup**: Ready to deploy with minimal configuration
 2. **Cost Effective**: $13/month vs $25-70/month (and no development costs)
 3. **Better Performance**: No cold starts, effective caching, no timeouts
 4. **Lower Risk**: Proven deployment pattern, minimal architectural changes
 5. **Easier Maintenance**: Standard Node.js debugging and monitoring
 6. **Future Flexibility**: Easy to scale up tiers as needed
 
-**Migration Priority**:
+**Deployment Priority**:
 
-1. ✅ **High Priority**: Replace Replit GitHub OAuth with standard OAuth2 flow
-2. ✅ **High Priority**: Set up Azure App Service and CI/CD
-3. ✅ **Medium Priority**: Configure environment variables and secrets
-4. ✅ **Medium Priority**: Test database connection (Neon should work as-is)
+1. ✅ **High Priority**: Set up Azure App Service and CI/CD
+2. ✅ **High Priority**: Configure environment variables and secrets
+3. ✅ **Medium Priority**: Test database connection (Neon should work as-is)
+4. ✅ **Medium Priority**: Set up GitHub token for API access
 5. ✅ **Low Priority**: Set up Application Insights for monitoring
 6. ✅ **Low Priority**: Configure custom domain and SSL
 
-**Timeline**: 1-2 weeks for complete migration and testing
+**Timeline**: 1-2 days for complete deployment and testing
 
 ---
 
@@ -636,11 +633,7 @@ server.listen({
   - [ ] `DATABASE_URL` (Neon connection string)
   - [ ] `PORT` (Azure sets automatically, but keep for compatibility)
   - [ ] `NODE_ENV=production`
-  - [ ] GitHub OAuth credentials (after removing Replit connector)
-- [ ] Remove Replit-specific code:
-  - [ ] Update `server/lib/github-client.ts` to use standard GitHub OAuth
-  - [ ] Remove `REPLIT_CONNECTORS_HOSTNAME` references
-  - [ ] Remove `REPL_IDENTITY` and `WEB_REPL_RENEWAL` logic
+  - [ ] `GITHUB_TOKEN` (GitHub Personal Access Token)
 - [ ] Test database connection
 - [ ] Enable "Always On" setting for no cold starts
 - [ ] Configure Application Insights (optional but recommended)
