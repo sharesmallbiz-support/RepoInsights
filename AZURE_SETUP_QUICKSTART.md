@@ -6,7 +6,7 @@ This is a quick reference guide for deploying GitHubSpark to Azure App Service. 
 
 - Azure account (free tier available)
 - GitHub Personal Access Token
-- PostgreSQL database (Neon free tier recommended)
+- No external database needed (uses local SQLite)
 
 ## Quick Deployment Steps
 
@@ -61,20 +61,7 @@ az webapp create \
 
 ---
 
-### 3. Set Up Database (3 minutes)
-
-#### Using Neon (Free tier)
-
-1. Go to [neon.tech](https://neon.tech) and sign up
-2. Create new project: "GitHubSpark"
-3. Copy connection string:
-   ```
-   postgresql://user:pass@ep-xxx.aws.neon.tech/neondb?sslmode=require
-   ```
-
----
-
-### 4. Configure Environment Variables in Azure (3 minutes)
+### 3. Configure Environment Variables in Azure (2 minutes)
 
 #### Option A: Azure Portal
 
@@ -85,10 +72,10 @@ az webapp create \
 | Name | Value |
 |------|-------|
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | Your Neon connection string |
 | `GITHUB_TOKEN` | Your GitHub PAT |
 | `WEBSITE_NODE_DEFAULT_VERSION` | `~20` |
 | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` |
+| `DATABASE_PATH` | `/home/data/sqlite.db` (optional) |
 
 4. Click **"Save"**
 
@@ -100,10 +87,10 @@ az webapp config appsettings set \
   --resource-group githubspark-rg \
   --settings \
     NODE_ENV="production" \
-    DATABASE_URL="postgresql://..." \
     GITHUB_TOKEN="ghp_..." \
     WEBSITE_NODE_DEFAULT_VERSION="~20" \
-    SCM_DO_BUILD_DURING_DEPLOYMENT="true"
+    SCM_DO_BUILD_DURING_DEPLOYMENT="true" \
+    DATABASE_PATH="/home/data/sqlite.db"
 ```
 
 ---
@@ -215,18 +202,8 @@ az webapp log tail --name your-app-name --resource-group githubspark-rg
 
 **Common issues**:
 1. ❌ Missing `GITHUB_TOKEN` → Add in Azure settings
-2. ❌ Invalid `DATABASE_URL` → Check connection string format
-3. ❌ Build failed → Review build logs in Azure
-
-### Database Connection Error
-
-**Test connection locally**:
-```bash
-export DATABASE_URL="your-connection-string"
-npm run db:push
-```
-
-**Check firewall**: Neon and Azure PostgreSQL allow connections by default, but verify in database settings
+2. ❌ Build failed → Review build logs in Azure
+3. ❌ Database errors → Database file is created automatically in `/home/data/`
 
 ### GitHub API Rate Limit
 
@@ -258,7 +235,7 @@ curl -H "Authorization: token YOUR_TOKEN" https://api.github.com/rate_limit
 | Service | Tier | Monthly Cost |
 |---------|------|--------------|
 | Azure App Service | Basic B1 | $13 |
-| Neon PostgreSQL | Free | $0 |
+| SQLite Database | Included | $0 |
 | GitHub Actions | Free (2000 min) | $0 |
 | **Total** | | **$13/month** |
 

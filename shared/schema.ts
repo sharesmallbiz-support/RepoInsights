@@ -1,10 +1,9 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, json } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
@@ -18,26 +17,26 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // GitHub Analysis Schema
-export const githubAnalysis = pgTable("github_analysis", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const githubAnalysis = sqliteTable("github_analysis", {
+  id: text("id").primaryKey(),
   // Common fields
   analysisType: text("analysis_type").notNull(), // 'repository', 'user'
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   // Repository-specific fields
   repositoryUrl: text("repository_url"),
   repositoryName: text("repository_name"),
   repositoryOwner: text("repository_owner"),
-  repositoryData: json("repository_data"),
-  commitsData: json("commits_data"),
-  contributorsData: json("contributors_data"),
-  doraMetrics: json("dora_metrics"),
-  healthMetrics: json("health_metrics"),
-  timelineData: json("timeline_data"),
-  workClassification: json("work_classification"),
+  repositoryData: text("repository_data", { mode: "json" }),
+  commitsData: text("commits_data", { mode: "json" }),
+  contributorsData: text("contributors_data", { mode: "json" }),
+  doraMetrics: text("dora_metrics", { mode: "json" }),
+  healthMetrics: text("health_metrics", { mode: "json" }),
+  timelineData: text("timeline_data", { mode: "json" }),
+  workClassification: text("work_classification", { mode: "json" }),
   // User-specific fields
   userUrl: text("user_url"),
   username: text("username"),
-  userAnalysisData: json("user_analysis_data"),
+  userAnalysisData: text("user_analysis_data", { mode: "json" }),
 });
 
 // DORA Metrics Types
