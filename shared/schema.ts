@@ -4,8 +4,24 @@ import { z } from "zod";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  username: text("username"), // Optional for local users
+  password: text("password"), // Optional - only for local auth
+
+  // GitHub OAuth fields
+  githubId: text("github_id").unique(), // GitHub user ID
+  githubUsername: text("github_username"), // GitHub username
+  githubAccessToken: text("github_access_token"), // OAuth access token
+  githubRefreshToken: text("github_refresh_token"), // Optional refresh token
+  githubTokenExpiry: integer("github_token_expiry"), // Token expiration timestamp
+
+  // Profile fields
+  email: text("email"),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+
+  // Metadata
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

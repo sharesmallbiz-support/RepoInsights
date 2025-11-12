@@ -1,21 +1,75 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import passport from "passport";
 import { storage } from "./storage";
-import { 
-  AnalysisRequestSchema, 
+import {
+  AnalysisRequestSchema,
   type AnalysisResponse,
   type RepositoryAnalysisResponse,
   type UserAnalysisResponse,
-  type DoraMetrics, 
-  type HealthMetrics, 
-  type Contributor, 
-  type TimelineDay, 
+  type DoraMetrics,
+  type HealthMetrics,
+  type Contributor,
+  type TimelineDay,
   type WorkClassification,
-  type UserAnalysis 
+  type UserAnalysis,
+  type User
 } from "@shared/schema";
 import { GitHubAnalyzer } from "./lib/github-analyzer";
 
+// Authentication middleware
+function ensureAuthenticated(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: "Not authenticated" });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication Routes
+
+  // GET /api/auth/github - Initiate GitHub OAuth
+  app.get("/api/auth/github", passport.authenticate("github", {
+    scope: ["read:user", "user:email", "repo", "read:org"]
+  }));
+
+  // GET /api/auth/github/callback - GitHub OAuth callback
+  app.get(
+    "/api/auth/github/callback",
+    passport.authenticate("github", { failureRedirect: "/login?error=oauth_failed" }),
+    (req, res) => {
+      // Successful authentication, redirect to dashboard
+      res.redirect("/");
+    }
+  );
+
+  // GET /api/auth/user - Get current logged-in user
+  app.get("/api/auth/user", (req, res) => {
+    if (req.isAuthenticated() && req.user) {
+      const user = req.user as User;
+      // Don't send sensitive data to client
+      res.json({
+        id: user.id,
+        githubUsername: user.githubUsername,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+      });
+    } else {
+      res.status(401).json({ error: "Not authenticated" });
+    }
+  });
+
+  // POST /api/auth/logout - Logout
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ success: true });
+    });
+  });
+
   // GitHub Analysis Routes
   app.post("/api/analyze", async (req, res) => {
     try {
